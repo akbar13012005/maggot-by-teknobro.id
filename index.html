@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="TeknoBro - Monitoring & Kontrol Suhu Maggot BSF berbasis IoT">
+    <meta name="theme-color" content="#060b1e">
+    <title>TeknoBro - Monitoring Suhu Maggot</title>
+
+    <!-- Favicon & PWA -->
+    <link rel="icon" href="assets/logo-teknobro.jpg" type="image/jpeg">
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TeknoBro">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ===== TOAST NOTIFICATION ===== -->
+    <div id="toast-container"></div>
+
+    <!-- ===== MOBILE OVERLAY ===== -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+        <!-- Logo -->
+        <div class="sidebar-logo">
+            <img src="assets/logo-teknobro.jpg" alt="TeknoBro Logo">
+            <h2>TeknoBro</h2>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-page="monitoring" onclick="navigateTo('monitoring', event)">
+                <div class="nav-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="nav-text">
+                    <span class="nav-title">Monitoring</span>
+                    <span class="nav-subtitle">Suhu & kelembaban real time</span>
+                </div>
+            </a>
+            <a href="#" class="nav-item" data-page="kontrol" onclick="navigateTo('kontrol', event)">
+                <div class="nav-icon"><i class="fas fa-sliders-h"></i></div>
+                <div class="nav-text">
+                    <span class="nav-title">Kontrol</span>
+                    <span class="nav-subtitle">Auto, manual & target suhu</span>
+                </div>
+            </a>
+            <a href="#" class="nav-item" data-page="riwayat" onclick="navigateTo('riwayat', event)">
+                <div class="nav-icon"><i class="fas fa-history"></i></div>
+                <div class="nav-text">
+                    <span class="nav-title">Riwayat</span>
+                    <span class="nav-subtitle">Grafik & unduh CSV</span>
+                </div>
+            </a>
+            <a href="#" class="nav-item" data-page="wifi" onclick="navigateTo('wifi', event)">
+                <div class="nav-icon"><i class="fas fa-wifi"></i></div>
+                <div class="nav-text">
+                    <span class="nav-title">Jaringan WiFi</span>
+                    <span class="nav-subtitle">SSID & password ESP32</span>
+                </div>
+            </a>
+        </nav>
+
+        <!-- Ringkasan -->
+        <div class="sidebar-summary">
+            <h4>Ringkasan</h4>
+            <div class="summary-item">
+                <span>Status</span>
+                <span class="summary-value" id="summary-status">
+                    <span class="status-dot online"></span> Online
+                </span>
+            </div>
+            <div class="summary-item">
+                <span>Mode</span>
+                <span class="summary-value" id="summary-mode">Auto</span>
+            </div>
+            <div class="summary-item">
+                <span>Target</span>
+                <span class="summary-value" id="summary-target">30.0°C</span>
+            </div>
+            <div class="summary-item">
+                <span>Kipas</span>
+                <span class="summary-value" id="summary-kipas">OFF</span>
+            </div>
+            <div class="summary-item">
+                <span>Pemanas</span>
+                <span class="summary-value" id="summary-pemanas">OFF</span>
+            </div>
+        </div>
+
+        <!-- PWA Install Button -->
+        <div class="sidebar-install" id="installContainer" style="display: none;">
+            <button class="btn btn-install" id="btnInstallApp" onclick="triggerPWAInstall()">
+                <i class="fas fa-download"></i> Install ke HP / PC
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="sidebar-footer">
+            <p>&copy; 2024 TeknoBro</p>
+            <p class="version">v1.0.0</p>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+
+        <!-- Mobile Header -->
+        <div class="mobile-header">
+            <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="mobile-logo">
+                <img src="assets/logo-teknobro.jpg" alt="TeknoBro">
+                <span>TeknoBro</span>
+            </div>
+            <div class="mobile-header-actions">
+                <button class="mobile-install-btn" id="mobileInstallBtn" style="display: none;" onclick="triggerPWAInstall()" title="Install Aplikasi">
+                    <i class="fas fa-arrow-down"></i>
+                </button>
+                <div class="mobile-status">
+                    <span class="status-dot online" id="mobile-status-dot"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: MONITORING ========== -->
+        <section class="page active" id="page-monitoring">
+            <!-- Header -->
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1><i class="fas fa-temperature-high"></i> Monitoring Suhu Maggot</h1>
+                    <p>Pantau dan kendalikan suhu media maggot dari mana saja</p>
+                </div>
+                <div class="page-header-right">
+                    <div class="status-badge online" id="statusBadge">
+                        <span class="status-dot"></span>
+                        <span id="statusText">ONLINE</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="exportCSV()">
+                        <i class="fas fa-file-csv"></i> Ekspor CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Demo Banner -->
+            <div class="demo-banner" id="demoBanner">
+                <i class="fas fa-info-circle"></i>
+                Mode demo: data simulasi. Isi konfigurasi Firebase di bagian CFG pada file <code>js/app.js</code>.
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card" id="card-suhu-media">
+                    <div class="stat-card-header">
+                        <span class="stat-label">Suhu Media</span>
+                        <div class="stat-icon suhu-media"><i class="fas fa-thermometer-half"></i></div>
+                    </div>
+                    <div class="stat-value" id="val-suhu-media">--.-°C</div>
+                    <div class="stat-status ideal" id="status-suhu-media">Memuat...</div>
+                </div>
+
+                <div class="stat-card" id="card-kelembaban">
+                    <div class="stat-card-header">
+                        <span class="stat-label">Kelembaban Udara</span>
+                        <div class="stat-icon kelembaban"><i class="fas fa-tint"></i></div>
+                    </div>
+                    <div class="stat-value" id="val-kelembaban">--.-%</div>
+                    <div class="stat-status" id="status-kelembaban">Memuat...</div>
+                </div>
+
+                <div class="stat-card" id="card-target">
+                    <div class="stat-card-header">
+                        <span class="stat-label">Target Suhu</span>
+                        <div class="stat-icon target"><i class="fas fa-crosshairs"></i></div>
+                    </div>
+                    <div class="stat-value" id="val-target">--.-°C</div>
+                    <div class="stat-status" id="status-mode">Mode Auto</div>
+                </div>
+            </div>
+
+            <!-- Gauge & Trend Row -->
+            <div class="charts-grid">
+                <!-- Gauge -->
+                <div class="chart-card gauge-card">
+                    <h3 class="chart-title">Suhu Media Saat Ini</h3>
+                    <div class="gauge-wrapper">
+                        <svg viewBox="0 0 300 200" class="gauge-svg" id="gaugeSvg">
+                            <!-- Background arc -->
+                            <defs>
+                                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#00b4d8"/>
+                                    <stop offset="30%" style="stop-color:#00c853"/>
+                                    <stop offset="60%" style="stop-color:#ffa726"/>
+                                    <stop offset="100%" style="stop-color:#ef5350"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- Track -->
+                            <path d="M 30 170 A 120 120 0 0 1 270 170" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="20" stroke-linecap="round"/>
+                            <!-- Value arc -->
+                            <path id="gaugeArc" d="M 30 170 A 120 120 0 0 1 270 170" fill="none" stroke="url(#gaugeGradient)" stroke-width="20" stroke-linecap="round" stroke-dasharray="0, 377"/>
+                            <!-- Tick marks -->
+                            <text x="22" y="190" fill="#7b89a8" font-size="11" font-family="Inter">20</text>
+                            <text x="55" y="120" fill="#7b89a8" font-size="11" font-family="Inter">25</text>
+                            <text x="120" y="72" fill="#7b89a8" font-size="11" font-family="Inter">30</text>
+                            <text x="190" y="72" fill="#7b89a8" font-size="11" font-family="Inter">35</text>
+                            <text x="235" y="120" fill="#7b89a8" font-size="11" font-family="Inter">40</text>
+                            <text x="260" y="190" fill="#7b89a8" font-size="11" font-family="Inter">45</text>
+                            <!-- Needle -->
+                            <line id="gaugeNeedle" x1="150" y1="170" x2="150" y2="65" stroke="#fff" stroke-width="3" stroke-linecap="round" transform="rotate(-90, 150, 170)" style="transition: transform 1s ease-out;"/>
+                            <!-- Center circle -->
+                            <circle cx="150" cy="170" r="8" fill="#00b4d8"/>
+                            <circle cx="150" cy="170" r="4" fill="#060b1e"/>
+                        </svg>
+                        <div class="gauge-value-display">
+                            <span class="gauge-temp" id="gaugeTemp">--.-</span>
+                            <span class="gauge-unit">°C</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trend Chart -->
+                <div class="chart-card trend-card">
+                    <h3 class="chart-title">Tren Suhu (60 Menit Terakhir)</h3>
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== PAGE: KONTROL ========== -->
+        <section class="page" id="page-kontrol">
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1><i class="fas fa-sliders-h"></i> Kontrol Perangkat</h1>
+                    <p>Atur mode, target suhu, dan kontrol perangkat pendingin & pemanas</p>
+                </div>
+            </div>
+
+            <!-- Mode Selection -->
+            <div class="control-section">
+                <div class="control-card mode-card">
+                    <div class="control-card-header">
+                        <div class="control-icon mode"><i class="fas fa-robot"></i></div>
+                        <div>
+                            <h3>Mode Operasi</h3>
+                            <p>Pilih mode kontrol perangkat</p>
+                        </div>
+                    </div>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" id="btn-mode-auto" onclick="setMode('auto')">
+                            <i class="fas fa-robot"></i>
+                            <span>Auto</span>
+                            <small>Sistem otomatis ESP32</small>
+                        </button>
+                        <button class="mode-btn" id="btn-mode-manual" onclick="setMode('manual')">
+                            <i class="fas fa-hand-paper"></i>
+                            <span>Manual</span>
+                            <small>Kontrol dari aplikasi</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Temperature -->
+            <div class="control-section">
+                <div class="control-card">
+                    <div class="control-card-header">
+                        <div class="control-icon target"><i class="fas fa-crosshairs"></i></div>
+                        <div>
+                            <h3>Target Suhu</h3>
+                            <p>Atur suhu target media maggot</p>
+                        </div>
+                    </div>
+                    <div class="target-control">
+                        <button class="target-btn minus" onclick="adjustTarget(-0.5)">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <div class="target-display">
+                            <input type="number" id="targetInput" value="30.0" min="20" max="45" step="0.5" onchange="setTarget(this.value)">
+                            <span class="target-unit">°C</span>
+                        </div>
+                        <button class="target-btn plus" onclick="adjustTarget(0.5)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="target-slider-wrap">
+                        <input type="range" id="targetSlider" min="20" max="45" step="0.5" value="30.0" oninput="setTarget(this.value)">
+                        <div class="slider-labels">
+                            <span>20°C</span>
+                            <span>30°C</span>
+                            <span>45°C</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Controls -->
+            <div class="control-section" id="manualControls">
+                <h3 class="section-title">Kontrol Manual</h3>
+                <p class="section-subtitle" id="manualHint">Aktifkan mode Manual untuk mengontrol perangkat secara langsung</p>
+                <div class="controls-grid">
+                    <!-- Kipas + Peltier -->
+                    <div class="control-card device-card" id="card-kipas">
+                        <div class="device-status-ring" id="ring-kipas">
+                            <div class="device-icon-wrap">
+                                <i class="fas fa-fan" id="icon-kipas"></i>
+                            </div>
+                        </div>
+                        <h4>Pendingin</h4>
+                        <p>Kipas + Peltier</p>
+                        <div class="device-status" id="device-status-kipas">OFF</div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-kipas" onchange="toggleDevice('kipas_peltier', this.checked)" disabled>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- Lampu Pemanas -->
+                    <div class="control-card device-card" id="card-lampu">
+                        <div class="device-status-ring" id="ring-lampu">
+                            <div class="device-icon-wrap">
+                                <i class="fas fa-lightbulb" id="icon-lampu"></i>
+                            </div>
+                        </div>
+                        <h4>Pemanas</h4>
+                        <p>Lampu Ayam</p>
+                        <div class="device-status" id="device-status-lampu">OFF</div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-lampu" onchange="toggleDevice('lampu_pemanas', this.checked)" disabled>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== PAGE: RIWAYAT ========== -->
+        <section class="page" id="page-riwayat">
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1><i class="fas fa-history"></i> Riwayat Data</h1>
+                    <p>Lihat grafik historis dan unduh data dalam format CSV</p>
+                </div>
+                <div class="page-header-right">
+                    <button class="btn btn-primary" onclick="exportCSV()">
+                        <i class="fas fa-download"></i> Download CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filter -->
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label><i class="fas fa-calendar"></i> Dari</label>
+                    <input type="date" id="dateFrom" onchange="loadHistory()">
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-calendar"></i> Sampai</label>
+                    <input type="date" id="dateTo" onchange="loadHistory()">
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-filter"></i> Jumlah Data</label>
+                    <select id="dataLimit" onchange="loadHistory()">
+                        <option value="50">50 terakhir</option>
+                        <option value="100" selected>100 terakhir</option>
+                        <option value="200">200 terakhir</option>
+                        <option value="500">500 terakhir</option>
+                        <option value="0">Semua</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline" onclick="loadHistory()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+
+            <!-- History Chart -->
+            <div class="chart-card" style="margin-bottom: 1.5rem;">
+                <h3 class="chart-title">Grafik Historis</h3>
+                <div class="chart-container chart-container-lg">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- History Table -->
+            <div class="table-card">
+                <div class="table-header">
+                    <h3 class="chart-title">Data Historis</h3>
+                    <span class="data-count" id="dataCount">0 data</span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Waktu</th>
+                                <th>Suhu Media</th>
+                                <th>Kelembaban</th>
+                                <th>Target</th>
+                                <th>Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    <i class="fas fa-database"></i>
+                                    <p>Belum ada data riwayat</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== PAGE: JARINGAN WIFI ========== -->
+        <section class="page" id="page-wifi">
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1><i class="fas fa-wifi"></i> Jaringan WiFi ESP32</h1>
+                    <p>Daftarkan hingga 3 profil WiFi agar ESP32 otomatis tersambung ke jaringan terbaik</p>
+                </div>
+                <div class="page-header-right">
+                    <button class="btn btn-primary" onclick="saveWiFiConfig()">
+                        <i class="fas fa-save"></i> Simpan ke Perangkat
+                    </button>
+                </div>
+            </div>
+
+            <!-- Current WiFi Status Card -->
+            <div class="wifi-status-card">
+                <div class="wifi-status-header">
+                    <div class="wifi-status-icon">
+                        <i class="fas fa-broadcast-tower"></i>
+                    </div>
+                    <div>
+                        <h3>Status Koneksi Saat Ini</h3>
+                        <p>Informasi jaringan yang sedang aktif pada modul ESP32</p>
+                    </div>
+                </div>
+                <div class="wifi-status-details">
+                    <div class="wifi-detail-item">
+                        <span class="detail-label"><i class="fas fa-network-wired"></i> SSID Aktif</span>
+                        <span class="detail-val" id="wifi-current-ssid">Home_WiFi_2.4G</span>
+                    </div>
+                    <div class="wifi-detail-item">
+                        <span class="detail-label"><i class="fas fa-signal"></i> Sinyal (RSSI)</span>
+                        <span class="detail-val" id="wifi-current-rssi">-52 dBm <small class="signal-tag">(Sangat Baik)</small></span>
+                    </div>
+                    <div class="wifi-detail-item">
+                        <span class="detail-label"><i class="fas fa-map-marker-alt"></i> Alamat IP</span>
+                        <span class="detail-val" id="wifi-current-ip">192.168.1.45</span>
+                    </div>
+                    <div class="wifi-detail-item">
+                        <span class="detail-label"><i class="fas fa-shield-alt"></i> Mode Auto-Switch</span>
+                        <span class="detail-val text-success"><i class="fas fa-check-circle"></i> Aktif (WiFiMulti)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3 WiFi Slots -->
+            <div class="wifi-slots-grid">
+                <!-- Slot 1 -->
+                <div class="control-card wifi-slot-card">
+                    <div class="wifi-slot-header">
+                        <div class="slot-badge priority-1">
+                            <i class="fas fa-star"></i> Slot 1 (Utama)
+                        </div>
+                        <span class="slot-status active" id="slot1-status">Terhubung</span>
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-ssid-1"><i class="fas fa-wifi"></i> Nama WiFi (SSID)</label>
+                        <input type="text" id="wifi-ssid-1" class="wifi-input" placeholder="Contoh: WiFi_Rumah" value="Home_WiFi_2.4G">
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-pass-1"><i class="fas fa-key"></i> Kata Sandi (Password)</label>
+                        <div class="password-input-wrap">
+                            <input type="password" id="wifi-pass-1" class="wifi-input" placeholder="Masukkan password" value="maggot2024">
+                            <button type="button" class="btn-toggle-eye" onclick="togglePasswordVisibility('wifi-pass-1', this)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slot 2 -->
+                <div class="control-card wifi-slot-card">
+                    <div class="wifi-slot-header">
+                        <div class="slot-badge priority-2">
+                            <i class="fas fa-shield-alt"></i> Slot 2 (Cadangan 1)
+                        </div>
+                        <span class="slot-status standby" id="slot2-status">Siaga</span>
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-ssid-2"><i class="fas fa-wifi"></i> Nama WiFi (SSID)</label>
+                        <input type="text" id="wifi-ssid-2" class="wifi-input" placeholder="Contoh: Hotspot_HP" value="Hotspot_TeknoBro">
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-pass-2"><i class="fas fa-key"></i> Kata Sandi (Password)</label>
+                        <div class="password-input-wrap">
+                            <input type="password" id="wifi-pass-2" class="wifi-input" placeholder="Masukkan password" value="teknobro123">
+                            <button type="button" class="btn-toggle-eye" onclick="togglePasswordVisibility('wifi-pass-2', this)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slot 3 -->
+                <div class="control-card wifi-slot-card">
+                    <div class="wifi-slot-header">
+                        <div class="slot-badge priority-3">
+                            <i class="fas fa-shield-alt"></i> Slot 3 (Cadangan 2)
+                        </div>
+                        <span class="slot-status standby" id="slot3-status">Siaga</span>
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-ssid-3"><i class="fas fa-wifi"></i> Nama WiFi (SSID)</label>
+                        <input type="text" id="wifi-ssid-3" class="wifi-input" placeholder="Contoh: WiFi_Kandang" value="Kandang_Maggot_IoT">
+                    </div>
+                    <div class="wifi-form-group">
+                        <label for="wifi-pass-3"><i class="fas fa-key"></i> Kata Sandi (Password)</label>
+                        <div class="password-input-wrap">
+                            <input type="password" id="wifi-pass-3" class="wifi-input" placeholder="Masukkan password" value="bsfberkah">
+                            <button type="button" class="btn-toggle-eye" onclick="togglePasswordVisibility('wifi-pass-3', this)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WiFi Tips Card -->
+            <div class="wifi-info-card">
+                <i class="fas fa-lightbulb"></i>
+                <div class="info-content">
+                    <h4>Bagaimana Fitur Auto-Connect Bekerja?</h4>
+                    <p>ESP32 menggunakan fitur bawaan <strong>WiFiMulti</strong>. Sistem akan memindai ketiga jaringan di atas secara otomatis. Jika jaringan utama (Slot 1) tiba-tiba mati atau di luar jangkauan, ESP32 akan langsung beralih ke jaringan cadangan (Slot 2 atau 3) yang paling kuat sinyalnya tanpa perlu restart alat.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Custom JS -->
+    <script src="js/app.js"></script>
+</body>
+</html>
