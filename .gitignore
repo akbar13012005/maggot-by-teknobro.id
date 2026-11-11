@@ -7,3 +7,6 @@ Desktop.ini
 # Temporary files
 *.tmp
 *.log
+
+# ESP32 local credentials (never commit)
+/esp32/secrets.h

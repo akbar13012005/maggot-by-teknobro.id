@@ -25,9 +25,11 @@
 #include <WiFiMulti.h>
 #include <Preferences.h>
 #include <Firebase_ESP_Client.h>
+#include <addons/TokenHelper.h>  // Log status pembuatan dan refresh token Firebase
 #include <Wire.h>
 #include <Adafruit_SHT31.h>
 #include <time.h>
+#include "secrets.h"  // File lokal; jangan commit kredensial ke GitHub
 
 // ==========================================
 // ========== KONFIGURASI ==================
@@ -35,18 +37,32 @@
 
 // Default 3 Profil WiFi (akan disimpan di flash memory NVS ESP32)
 // Pengguna juga bisa mengganti ini kapan saja lewat Web App!
-#define DEFAULT_SSID_1       "Home_WiFi_2.4G"
-#define DEFAULT_PASS_1       "maggot2024"
+// Nilai WiFi dan Firebase diambil dari secrets.h lokal (tidak masuk Git).
+#ifndef DEFAULT_SSID_1
+#define DEFAULT_SSID_1 ""
+#endif
+#ifndef DEFAULT_PASS_1
+#define DEFAULT_PASS_1 ""
+#endif
+#ifndef DEFAULT_SSID_2
+#define DEFAULT_SSID_2 ""
+#endif
+#ifndef DEFAULT_PASS_2
+#define DEFAULT_PASS_2 ""
+#endif
+#ifndef DEFAULT_SSID_3
+#define DEFAULT_SSID_3 ""
+#endif
+#ifndef DEFAULT_PASS_3
+#define DEFAULT_PASS_3 ""
+#endif
 
-#define DEFAULT_SSID_2       "Hotspot_TeknoBro"
-#define DEFAULT_PASS_2       "teknobro123"
-
-#define DEFAULT_SSID_3       "Kandang_Maggot_IoT"
-#define DEFAULT_PASS_3       "bsfberkah"
-
-// Firebase
-#define FIREBASE_HOST   "PROJECT-ID.firebaseio.com"  // Tanpa https://
-#define FIREBASE_API_KEY "YOUR_API_KEY"
+#ifndef FIREBASE_API_KEY
+#error "Isi FIREBASE_API_KEY pada esp32/secrets.h"
+#endif
+#ifndef FIREBASE_DATABASE_URL
+#error "Isi FIREBASE_DATABASE_URL pada esp32/secrets.h"
+#endif
 
 // Pin GPIO
 #define PIN_KIPAS_PELTIER   26    // Relay Kipas + Peltier (1 GPIO)
@@ -63,7 +79,9 @@
 #define FIREBASE_SEND_INTERVAL  10000   // Kirim data ke Firebase setiap 10 detik
 #define HISTORY_SAVE_INTERVAL   300000  // Simpan history setiap 5 menit
 #define CONTROL_CHECK_INTERVAL  2000    // Cek kontrol dari Firebase setiap 2 detik
-#define STATUS_UPDATE_INTERVAL  30000   // Update status online setiap 30 detik
+#define STATUS_UPDATE_INTERVAL  30000   // Update metadata status setiap 30 detik
+#define WIFI_RECONNECT_INTERVAL 15000   // Jeda antar percobaan reconnect WiFi
+#define VALID_EPOCH_MIN         1700000000UL
 
 // Batas suhu untuk mode auto (hysteresis)
 #define HYSTERESIS  1.0   // ±1°C dari target
@@ -90,6 +108,7 @@ String wifi_ssid_1, wifi_pass_1;
 String wifi_ssid_2, wifi_pass_2;
 String wifi_ssid_3, wifi_pass_3;
 unsigned long lastWiFiUpdate = 0;
+unsigned long lastWiFiReconnectAttempt = 0;
 
 // Variabel sensor
 float suhuMedia = 0.0;
@@ -167,6 +186,14 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
+    // Firebase membuat/menyegarkan token secara asynchronous setelah begin().
+    // Jangan jalankan operasi RTDB sebelum Firebase.ready() benar-benar true.
+    if (!firebaseReady && Firebase.ready()) {
+        firebaseReady = true;
+        Serial.println("✅ Firebase Authentication berhasil; RTDB siap.");
+        cekKontrolFirebase();
+    }
+
     // 1. Baca sensor
     if (now - lastSensorRead >= SENSOR_READ_INTERVAL) {
         lastSensorRead = now;
@@ -174,7 +201,7 @@ void loop() {
     }
 
     // 2. Cek kontrol dari Firebase
-    if (now - lastControlCheck >= CONTROL_CHECK_INTERVAL) {
+    if (firebaseReady && now - lastControlCheck >= CONTROL_CHECK_INTERVAL) {
         lastControlCheck = now;
         cekKontrolFirebase();
     }
@@ -183,25 +210,26 @@ void loop() {
     eksekusiKontrol();
 
     // 4. Kirim data sensor ke Firebase
-    if (now - lastFirebaseSend >= FIREBASE_SEND_INTERVAL) {
+    if (firebaseReady && now - lastFirebaseSend >= FIREBASE_SEND_INTERVAL) {
         lastFirebaseSend = now;
         kirimDataSensor();
     }
 
     // 5. Simpan history
-    if (now - lastHistorySave >= HISTORY_SAVE_INTERVAL) {
+    if (firebaseReady && now - lastHistorySave >= HISTORY_SAVE_INTERVAL) {
         lastHistorySave = now;
         simpanHistory();
     }
 
     // 6. Update status online
-    if (now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
+    if (firebaseReady && now - lastStatusUpdate >= STATUS_UPDATE_INTERVAL) {
         lastStatusUpdate = now;
         updateStatus();
     }
 
     // Reconnect WiFi jika terputus
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED && now - lastWiFiReconnectAttempt >= WIFI_RECONNECT_INTERVAL) {
+        lastWiFiReconnectAttempt = now;
         Serial.println("⚠️ WiFi terputus! Mencoba reconnect...");
         connectWiFi();
     }
@@ -237,7 +265,7 @@ void connectWiFi() {
     WiFi.mode(WIFI_STA);
 
     int attempts = 0;
-    while (wifiMulti.run() != WL_CONNECTED && attempts < 25) {
+    while (wifiMulti.run() != WL_CONNECTED && attempts < 10) {
         delay(500);
         Serial.print(".");
         attempts++;
@@ -263,30 +291,26 @@ void connectWiFi() {
 // ==========================================
 
 void setupFirebase() {
-    Serial.println("🔥 Mengkonfigurasi Firebase...");
+    Serial.println("🔥 Mengkonfigurasi Firebase Realtime Database...");
 
     config.api_key = FIREBASE_API_KEY;
-    config.database_url = FIREBASE_HOST;
+    config.database_url = FIREBASE_DATABASE_URL;
 
-    // Anonymous auth (atur rules Firebase agar allow read/write)
-    Firebase.begin(&config, &auth);
-    Firebase.reconnectNetwork(true);
-
-    // Cek koneksi
-    if (Firebase.ready()) {
-        firebaseReady = true;
-        Serial.println("✅ Firebase terhubung!");
-
-        // Set status online
-        Firebase.RTDB.setBool(&fbData, "/status/online", true);
-        Firebase.RTDB.setInt(&fbData, "/status/last_seen", getEpochTime());
-
-        // Baca kontrol awal
-        cekKontrolFirebase();
-    } else {
-        Serial.println("❌ Gagal terhubung Firebase!");
+    // Firebase Authentication > Sign-in method > Anonymous harus diaktifkan.
+    // Untuk produksi, batasi Rules per path dan pertimbangkan autentikasi perangkat khusus.
+    if (!Firebase.signUp(&config, &auth, "", "")) {
+        Serial.print("❌ Anonymous sign-up gagal: ");
+        Serial.println(config.signer.signupError.message.c_str());
         firebaseReady = false;
+        return;
     }
+
+    config.token_status_callback = tokenStatusCallback;
+    fbData.setBSSLBufferSize(4096, 1024);
+    Firebase.begin(&config, &auth);
+    Firebase.reconnectWiFi(true);
+    firebaseReady = false; // Token dibuat asynchronous; loop() akan menunggu Firebase.ready().
+    Serial.println("⏳ Menunggu token autentikasi Firebase...");
 }
 
 // ==========================================
@@ -412,26 +436,45 @@ void eksekusiKontrol() {
 // ==========================================
 
 void kirimDataSensor() {
-    if (!firebaseReady || !Firebase.ready()) return;
+    if (!firebaseReady || !Firebase.ready() || WiFi.status() != WL_CONNECTED) return;
+    if (!sensorOK || !isfinite(suhuMedia) || !isfinite(kelembaban)) {
+        Serial.println("⚠️ Data sensor tidak valid; upload dibatalkan.");
+        return;
+    }
 
-    unsigned long epochTime = getEpochTime();
+    const unsigned long epochTime = getEpochTime();
+    if (epochTime < VALID_EPOCH_MIN) {
+        Serial.println("⏳ NTP belum sinkron; upload ditunda agar timestamp bukan millis().");
+        return;
+    }
 
-    // Update sensor data
-    Firebase.RTDB.setFloat(&fbData, "/sensor/suhu_media", suhuMedia);
-    Firebase.RTDB.setFloat(&fbData, "/sensor/kelembaban", kelembaban);
-    Firebase.RTDB.setInt(&fbData, "/sensor/timestamp", epochTime);
+    // Kirim satu objek agar suhu, kelembapan, dan timestamp selalu konsisten.
+    FirebaseJson sensorJson;
+    sensorJson.set("suhu_media", suhuMedia);
+    sensorJson.set("kelembaban", kelembaban);
+    sensorJson.set("timestamp", (int)epochTime);
 
-    // Update control state (untuk sinkronisasi mode auto)
-    Firebase.RTDB.setBool(&fbData, "/control/kipas_peltier", kipas_peltier);
-    Firebase.RTDB.setBool(&fbData, "/control/lampu_pemanas", lampu_pemanas);
-
-    Serial.println("📤 Data terkirim ke Firebase");
+    if (Firebase.RTDB.setJSON(&fbData, "/sensor", &sensorJson)) {
+        Serial.printf("📤 Sensor terkirim | %.1f C | %.1f %% | epoch %lu\n",
+                      suhuMedia, kelembaban, epochTime);
+        Firebase.RTDB.setBool(&fbData, "/status/online", true);
+        Firebase.RTDB.setInt(&fbData, "/status/last_seen", (int)epochTime);
+        Firebase.RTDB.setBool(&fbData, "/control/kipas_peltier", kipas_peltier);
+        Firebase.RTDB.setBool(&fbData, "/control/lampu_pemanas", lampu_pemanas);
+    } else {
+        Serial.print("❌ Upload sensor gagal: ");
+        Serial.println(fbData.errorReason());
+    }
 }
 
 void simpanHistory() {
-    if (!firebaseReady || !Firebase.ready()) return;
+    if (!firebaseReady || !Firebase.ready() || !sensorOK) return;
 
     unsigned long epochTime = getEpochTime();
+    if (epochTime < VALID_EPOCH_MIN) {
+        Serial.println("⏳ History ditunda: NTP belum sinkron.");
+        return;
+    }
 
     // Simpan ke history menggunakan push (auto-generate key)
     FirebaseJson json;
@@ -451,12 +494,9 @@ void simpanHistory() {
 }
 
 void updateStatus() {
-    if (!firebaseReady || !Firebase.ready()) return;
+    if (!firebaseReady || !Firebase.ready() || WiFi.status() != WL_CONNECTED) return;
 
-    unsigned long uptime = (millis() - bootTime) / 1000;
-
-    Firebase.RTDB.setBool(&fbData, "/status/online", true);
-    Firebase.RTDB.setInt(&fbData, "/status/last_seen", getEpochTime());
+    const unsigned long uptime = (millis() - bootTime) / 1000;
     Firebase.RTDB.setString(&fbData, "/status/wifi_ssid", WiFi.SSID());
     Firebase.RTDB.setInt(&fbData, "/status/wifi_rssi", WiFi.RSSI());
     Firebase.RTDB.setString(&fbData, "/status/ip", WiFi.localIP().toString());
@@ -468,11 +508,7 @@ void updateStatus() {
 // ==========================================
 
 unsigned long getEpochTime() {
-    time_t now;
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
-        return millis() / 1000;
-    }
-    time(&now);
-    return now;
+    time_t now = time(nullptr);
+    if (now < VALID_EPOCH_MIN) return 0; // Jangan pernah memakai millis() sebagai Unix time.
+    return (unsigned long)now;
 }

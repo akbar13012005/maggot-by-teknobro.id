@@ -30,6 +30,7 @@
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 
     <!-- Custom CSS -->
@@ -96,7 +97,7 @@
             <div class="summary-item">
                 <span>Status</span>
                 <span class="summary-value" id="summary-status">
-                    <span class="status-dot online"></span> Online
+                    <span class="status-dot standby"></span> Menunggu data
                 </span>
             </div>
             <div class="summary-item">
@@ -146,7 +147,7 @@
                     <i class="fas fa-download"></i>
                 </button>
                 <div class="status-indicator">
-                    <span class="status-dot online" id="mobile-status-dot"></span>
+                    <span class="status-dot standby" id="mobile-status-dot"></span>
                 </div>
             </div>
         </header>
@@ -167,7 +168,7 @@
                 <div class="page-header-right">
                     <span class="live-badge" id="liveBadge">
                         <span class="pulse-ring"></span>
-                        <span class="badge-text" id="badgeText">ONLINE</span>
+                        <span class="badge-text" id="badgeText">MENUNGGU DATA</span>
                     </span>
                     <button class="btn btn-primary" onclick="exportCSV()">
                         <i class="fas fa-file-csv"></i> Ekspor CSV
