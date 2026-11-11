@@ -1,0 +1,14 @@
+{
+  "appId": "id.teknobro.maggot",
+  "appName": "TeknoBro",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://akbar13012005.github.io/maggot-by-teknobro.id/",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#060b1e",
+    "allowMixedContent": true
+  }
+}

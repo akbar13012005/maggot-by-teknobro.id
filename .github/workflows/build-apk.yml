@@ -1,0 +1,68 @@
+name: Build TeknoBro Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Pure Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Capacitor CLI & Dependencies
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init TeknoBro id.teknobro.maggot --web-dir .
+          npx cap add android
+
+      - name: Configure Android App Properties
+        run: |
+          # Pastikan konfigurasi server live update terpasang di capacitor config
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "id.teknobro.maggot",
+            "appName": "TeknoBro",
+            "webDir": ".",
+            "bundledWebRuntime": false,
+            "server": {
+              "url": "https://akbar13012005.github.io/maggot-by-teknobro.id/",
+              "cleartext": true
+            },
+            "android": {
+              "backgroundColor": "#060b1e",
+              "allowMixedContent": true
+            }
+          }
+          EOF
+          npx cap sync android
+
+      - name: Setup Android Keystore & Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TeknoBro-Native-App
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
