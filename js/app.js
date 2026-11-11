@@ -1182,9 +1182,9 @@ function updateBluetoothUI() {
 
 // Koneksi Bluetooth (Web Bluetooth BLE API & Android Native Bridge)
 async function handleBleConnect() {
-    // Pastikan Bluetooth ESP32 sudah aktif dulu
+    // 1. Verifikasi Saklar Bluetooth ESP32
     if (!state.bluetoothEnabled) {
-        showToast('Nyalakan saklar Bluetooth ESP32 terlebih dahulu!', 'warning');
+        showToast('⚠️ Nyalakan saklar Bluetooth ESP32 terlebih dahulu di sebelah kiri!', 'warning');
         return;
     }
 
@@ -1194,20 +1194,75 @@ async function handleBleConnect() {
     const deviceNameEl = document.getElementById('bleConnDeviceName');
     const metaInfo = document.getElementById('bleMetaInfo');
 
+    function resetConnectBtn() {
+        if (btnConnect) {
+            btnConnect.disabled = false;
+            btnConnect.style.display = 'inline-flex';
+            btnConnect.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth';
+        }
+        if (btnDisconnect) btnDisconnect.style.display = 'none';
+        if (pill) {
+            pill.className = 'ble-conn-pill disconnected';
+            pill.textContent = 'Terputus';
+        }
+        if (metaInfo) metaInfo.style.display = 'none';
+        if (deviceNameEl) deviceNameEl.textContent = 'Belum Terhubung ke ESP32';
+        state.bleConnected = false;
+        state.bleDevice = null;
+        updateStartOtaButtonState();
+    }
+
+    // 2. Verifikasi Bluetooth HP Aktif (di APK Android Native)
+    if (window.AndroidBLE && typeof window.AndroidBLE.isBluetoothEnabled === 'function') {
+        const isBtOn = window.AndroidBLE.isBluetoothEnabled();
+        if (!isBtOn) {
+            showToast('⚠️ Bluetooth di HP Anda belum aktif! Silakan nyalakan Bluetooth HP.', 'error');
+            if (typeof window.AndroidBLE.openBluetoothSettings === 'function') {
+                setTimeout(() => window.AndroidBLE.openBluetoothSettings(), 800);
+            }
+            return;
+        }
+    }
+
     if (btnConnect) {
         btnConnect.disabled = true;
         btnConnect.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Mencari ESP32...';
     }
 
-    // Jika Web Bluetooth API didukung oleh browser/perangkat
+    // 3. Scan & Connect via Web Bluetooth BLE API (Real Hardware)
     if (navigator.bluetooth) {
         try {
+            if (typeof navigator.bluetooth.getAvailability === 'function') {
+                const available = await navigator.bluetooth.getAvailability();
+                if (!available) {
+                    showToast('⚠️ Bluetooth pada perangkat Anda belum diaktifkan!', 'error');
+                    resetConnectBtn();
+                    return;
+                }
+            }
+
             const device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: ['battery_service', '0000fe18-0000-1000-8000-00805f9b34fb', 'fb1e4001-54ae-4a28-9f74-d9075c3d5b90']
+                optionalServices: [
+                    'battery_service',
+                    '0000fe18-0000-1000-8000-00805f9b34fb',
+                    'fb1e4001-54ae-4a28-9f74-d9075c3d5b90'
+                ]
             });
 
+            if (!device) {
+                resetConnectBtn();
+                return;
+            }
+
+            // Hubungkan langsung ke GATT Server
+            if (btnConnect) btnConnect.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Menyambungkan...';
+            showToast('Menyambungkan ke ' + (device.name || 'ESP32') + '...', 'info');
+
+            const server = await device.gatt.connect();
+
             state.bleDevice = device;
+            state.bleGattServer = server;
             state.bleConnected = true;
 
             const name = device.name || 'TeknoBro-OTA';
@@ -1221,39 +1276,59 @@ async function handleBleConnect() {
             if (btnConnect) btnConnect.style.display = 'none';
             if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
 
-            showToast(`Bluetooth terhubung ke ${name}!`, 'success');
+            showToast(`✅ Bluetooth berhasil terhubung ke ${name}!`, 'success');
 
             device.addEventListener('gattserverdisconnected', onBleDisconnected);
-
             updateStartOtaButtonState();
             return;
         } catch (err) {
-            console.warn('Web Bluetooth error / dibatalkan user:', err);
-            if (err.name !== 'NotFoundError') {
-                showToast('Bluetooth gagal tersambung: ' + err.message, 'warning');
+            resetConnectBtn();
+            if (err.name === 'NotFoundError') {
+                showToast('Pencarian Bluetooth dibatalkan / perangkat ESP32 tidak dipilih.', 'info');
+            } else {
+                showToast('Gagal menghubungkan Bluetooth: ' + err.message, 'warning');
             }
+            return;
         }
     }
 
-    // Fallback atau Simulator Connection untuk Android WebView & Browser
-    setTimeout(() => {
-        state.bleConnected = true;
-        if (deviceNameEl) deviceNameEl.textContent = 'Terhubung: TeknoBro-OTA (BLE)';
-        if (pill) {
-            pill.className = 'ble-conn-pill connected';
-            pill.textContent = 'Terhubung';
-        }
-        if (metaInfo) metaInfo.style.display = 'flex';
-        if (btnConnect) {
-            btnConnect.disabled = false;
-            btnConnect.style.display = 'none';
-            btnConnect.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth';
-        }
-        if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+    // 4. Jika Web Bluetooth tidak tersedia di environment ini (misal di beberapa WebView)
+    resetConnectBtn();
+    showToast('⚠️ Web Bluetooth membutuhkan Google Chrome Android atau aktifkan Mode Simulasi di bawah untuk uji coba tampilan.', 'warning');
+}
 
-        showToast('Bluetooth terhubung ke TeknoBro-OTA!', 'success');
-        updateStartOtaButtonState();
-    }, 800);
+// Mode Simulasi Khusus untuk Test Tampilan jika Tanpa Perangkat ESP32
+function handleBleSimulationToggle(event) {
+    if (event) event.preventDefault();
+
+    if (state.bleConnected) {
+        handleBleDisconnect();
+        return;
+    }
+
+    if (!state.bluetoothEnabled) {
+        showToast('Nyalakan saklar Bluetooth ESP32 terlebih dahulu!', 'warning');
+        return;
+    }
+
+    state.bleConnected = true;
+    const btnConnect = document.getElementById('btnBleConnect');
+    const btnDisconnect = document.getElementById('btnBleDisconnect');
+    const pill = document.getElementById('bleConnPill');
+    const deviceNameEl = document.getElementById('bleConnDeviceName');
+    const metaInfo = document.getElementById('bleMetaInfo');
+
+    if (deviceNameEl) deviceNameEl.textContent = 'Terhubung: TeknoBro-OTA (Mode Simulasi)';
+    if (pill) {
+        pill.className = 'ble-conn-pill connected';
+        pill.textContent = 'Simulasi';
+    }
+    if (metaInfo) metaInfo.style.display = 'flex';
+    if (btnConnect) btnConnect.style.display = 'none';
+    if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+
+    showToast('Mode Simulasi aktif: TeknoBro-OTA terhubung untuk uji coba', 'info');
+    updateStartOtaButtonState();
 }
 
 function handleBleDisconnect() {
@@ -1266,6 +1341,7 @@ function handleBleDisconnect() {
 function onBleDisconnected() {
     state.bleConnected = false;
     state.bleDevice = null;
+    state.bleGattServer = null;
 
     const btnConnect = document.getElementById('btnBleConnect');
     const btnDisconnect = document.getElementById('btnBleDisconnect');
@@ -1278,6 +1354,17 @@ function onBleDisconnected() {
         pill.className = 'ble-conn-pill disconnected';
         pill.textContent = 'Terputus';
     }
+    if (metaInfo) metaInfo.style.display = 'none';
+    if (btnConnect) {
+        btnConnect.disabled = false;
+        btnConnect.style.display = 'inline-flex';
+        btnConnect.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth';
+    }
+    if (btnDisconnect) btnDisconnect.style.display = 'none';
+
+    updateStartOtaButtonState();
+    showToast('Koneksi Bluetooth terputus', 'info');
+}
     if (metaInfo) metaInfo.style.display = 'none';
     if (btnConnect) {
         btnConnect.disabled = false;

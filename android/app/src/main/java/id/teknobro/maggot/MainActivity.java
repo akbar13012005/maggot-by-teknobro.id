@@ -2,12 +2,15 @@ package id.teknobro.maggot;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -22,6 +25,38 @@ public class MainActivity extends AppCompatActivity {
     private ValueCallback<Uri[]> mFilePathCallback;
     private final static int FILECHOOSER_RESULTCODE = 1001;
     private final static int PERMISSION_REQUEST_CODE = 2001;
+
+    public class AndroidBridge {
+        @JavascriptInterface
+        public boolean isBluetoothSupported() {
+            try {
+                BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                return adapter != null;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isBluetoothEnabled() {
+            try {
+                BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                return adapter != null && adapter.isEnabled();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public void openBluetoothSettings() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+                startActivity(intent);
+            } catch (Exception e) {
+                // ignore
+            }
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -50,6 +85,9 @@ public class MainActivity extends AppCompatActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
+
+        // Tambahkan jembatan JS ke fungsi native Android Bluetooth
+        webView.addJavascriptInterface(new AndroidBridge(), "AndroidBLE");
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
