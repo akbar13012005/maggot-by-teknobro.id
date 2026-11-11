@@ -254,8 +254,19 @@
     window.__targetWriteTimer = setTimeout(() => writeControl('target_suhu', next), 350);
   };
   window.toggleDevice = async (key, checked) => {
-    if (latestControl.mode !== 'manual') { toast('Ubah ke mode Manual terlebih dahulu.', 'error'); updateDevice(key, !!latestControl[key]); return; }
-    if (await writeControl(key, !!checked)) toast((key === 'kipas_peltier' ? 'Pendingin ' : 'Pemanas ') + (checked ? 'ON' : 'OFF'));
+    if (latestControl.mode !== 'manual') {
+      toast('Ubah ke mode Manual terlebih dahulu.', 'error');
+      updateDevice(key, !!latestControl[key]);
+      return;
+    }
+    if (await writeControl(key, !!checked)) {
+      // Update the interface immediately; the RTDB listener will confirm the persisted state.
+      latestControl[key] = !!checked;
+      updateDevice(key, !!checked);
+      toast((key === 'kipas_peltier' ? 'Pendingin ' : 'Pemanas ') + (checked ? 'ON' : 'OFF'), 'success');
+    } else {
+      updateDevice(key, !!latestControl[key]);
+    }
   };
 
   function renderHistory() {
