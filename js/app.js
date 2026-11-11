@@ -27,12 +27,34 @@
   function toast(message, type = 'info') {
     const host = $('toast-container');
     if (!host) { console.info(message); return; }
+
+    const icons = {
+      success: 'fa-circle-check',
+      error: 'fa-circle-xmark',
+      warning: 'fa-triangle-exclamation',
+      info: 'fa-circle-info'
+    };
+    const kind = Object.prototype.hasOwnProperty.call(icons, type) ? type : 'info';
     const item = document.createElement('div');
-    item.className = 'tb-toast ' + type;
-    item.textContent = message;
+    item.className = 'tb-toast ' + kind;
+    item.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    item.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
+
+    const icon = document.createElement('i');
+    icon.className = 'fas ' + icons[kind] + ' tb-toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const text = document.createElement('span');
+    text.className = 'tb-toast-message';
+    text.textContent = String(message);
+
+    item.append(icon, text);
     host.appendChild(item);
     requestAnimationFrame(() => item.classList.add('show'));
-    setTimeout(() => { item.classList.remove('show'); setTimeout(() => item.remove(), 250); }, 3500);
+    setTimeout(() => {
+      item.classList.remove('show');
+      setTimeout(() => item.remove(), 250);
+    }, 3500);
   }
 
   function navigateTo(page, event) {
@@ -210,7 +232,7 @@
   }
   window.setMode = async mode => {
     if (!['auto', 'manual'].includes(mode)) return;
-    if (await writeControl('mode', mode)) toast('Mode ' + (mode === 'auto' ? 'otomatis' : 'manual') + ' diaktifkan.');
+    if (await writeControl('mode', mode)) toast('Mode ' + (mode === 'auto' ? 'otomatis' : 'manual') + ' berhasil diaktifkan.', 'success');
   };
   window.adjustTarget = delta => {
     const current = Number($('targetInput')?.value ?? latestControl.target_suhu);
