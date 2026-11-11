@@ -2433,3 +2433,48 @@ body {
 .tab-content.active {
     display: block;
 }
+
+
+/* TeknoBro dashboard refinement: device freshness badge, gauge and responsive layout */
+#liveBadge {
+  display: inline-flex; align-items: center; gap: .65rem; min-height: 42px;
+  padding: .55rem .95rem; border: 1px solid var(--border); border-radius: 999px;
+  background: rgba(123,137,168,.10); color: var(--text-secondary);
+  font-size: .72rem; font-weight: 800; letter-spacing: .06em;
+  transition: background .25s ease, border-color .25s ease, color .25s ease;
+  white-space: nowrap;
+}
+#liveBadge .pulse-ring { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: 0 0 9px; }
+#liveBadge.online { color: #35d07f; background: rgba(0,200,83,.10); border-color: rgba(0,200,83,.35); }
+#liveBadge.online .pulse-ring { box-shadow: 0 0 0 0 rgba(53,208,127,.55); animation: tb-pulse 1.8s infinite; }
+#liveBadge.offline { color: #ff7474; background: rgba(239,83,80,.10); border-color: rgba(239,83,80,.35); }
+#liveBadge.stale { color: #ffbf57; background: rgba(255,167,38,.10); border-color: rgba(255,167,38,.35); }
+#liveBadge.waiting { color: #a5b1ca; background: rgba(123,137,168,.10); }
+@keyframes tb-pulse { 0% { box-shadow: 0 0 0 0 rgba(53,208,127,.45); } 70% { box-shadow: 0 0 0 8px rgba(53,208,127,0); } 100% { box-shadow: 0 0 0 0 rgba(53,208,127,0); } }
+
+.page { display: none; }
+.page.active { display: block; }
+.gauge-wrapper { width: 100%; max-width: 340px; margin: 0 auto; padding: .75rem .5rem 1.25rem; }
+.gauge-svg { display: block; width: 100%; max-width: 320px; height: auto; overflow: visible; }
+.gauge-bg, .gauge-fill { fill: none; stroke-width: 13; stroke-linecap: round; }
+.gauge-bg { stroke: rgba(255,255,255,.10); }
+.gauge-fill { stroke: url(#gaugeGradient); stroke-dasharray: 267; stroke-dashoffset: 267; transition: stroke-dashoffset .65s cubic-bezier(.2,.7,.2,1); filter: drop-shadow(0 0 7px rgba(0,180,216,.3)); }
+.gauge-value-display { position: relative; z-index: 2; margin-top: -2.15rem; min-height: 3.5rem; display: flex; justify-content: center; align-items: baseline; gap: .2rem; text-align: center; pointer-events: none; }
+.gauge-temp { font-size: clamp(2.1rem, 6vw, 3rem); line-height: 1; font-weight: 900; letter-spacing: -.06em; }
+.gauge-unit { font-size: 1.05rem; font-weight: 700; color: var(--text-secondary); }
+.gauge-tick { font-size: 10px; fill: var(--text-secondary); }
+.main-content { min-width: 0; }
+.chart-card, .stat-card { min-width: 0; }
+#toast-container { position: fixed; z-index: 9999; right: 1rem; bottom: 1rem; display: grid; gap: .5rem; pointer-events: none; }
+.tb-toast { max-width: min(420px, calc(100vw - 2rem)); padding: .8rem 1rem; border-radius: 12px; color: #e8ecf4; background: #152048; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 12px 32px rgba(0,0,0,.28); opacity: 0; transform: translateY(8px); transition: .2s ease; font-size: .85rem; }
+.tb-toast.show { opacity: 1; transform: translateY(0); }
+.tb-toast.error { border-color: rgba(239,83,80,.5); }
+@media (max-width: 768px) {
+  .page-header-right { flex-wrap: wrap; }
+  #liveBadge { order: 0; }
+  .gauge-wrapper { max-width: 300px; }
+}
+@media (max-width: 420px) {
+  .gauge-wrapper { max-width: 270px; }
+  .gauge-value-display { margin-top: -1.8rem; }
+}
