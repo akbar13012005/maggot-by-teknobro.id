@@ -2,14 +2,22 @@
   "id": "teknobro-maggot-monitor",
   "name": "TeknoBro - Monitoring Suhu Maggot",
   "short_name": "TeknoBro",
-  "description": "Aplikasi IoT Monitoring & Kontrol Suhu Maggot BSF Real-time",
-  "start_url": "./index.html",
+  "description": "Aplikasi IoT untuk monitoring dan kontrol suhu media maggot BSF secara real-time.",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait-primary",
   "background_color": "#060b1e",
   "theme_color": "#060b1e",
-  "categories": ["utilities", "productivity"],
+  "categories": [
+    "utilities",
+    "productivity"
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "assets/icon-192.png",

@@ -2478,3 +2478,74 @@ body {
   .gauge-wrapper { max-width: 270px; }
   .gauge-value-display { margin-top: -1.8rem; }
 }
+
+
+/* ---------- FINAL TOAST + MODE CARD FIX ---------- */
+.mode-check { display: none !important; }
+
+#toast-container {
+  position: fixed;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
+  z-index: 10050;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .65rem;
+  width: auto;
+  max-width: calc(100vw - 2rem);
+  pointer-events: none;
+}
+
+.tb-toast {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 2rem));
+  min-width: 0;
+  padding: .85rem 1rem;
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 14px;
+  color: #edf4ff;
+  background: #152048;
+  box-shadow: 0 12px 32px rgba(0,0,0,.32);
+  font-size: .9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .2s ease, transform .2s ease, border-color .2s ease;
+}
+
+.tb-toast.show { opacity: 1; transform: translateY(0); }
+.tb-toast .tb-toast-icon { flex: 0 0 auto; margin-top: .08rem; font-size: 1.05rem; }
+.tb-toast .tb-toast-message { min-width: 0; }
+.tb-toast.success { border: 1.5px solid #22c55e; }
+.tb-toast.success .tb-toast-icon { color: #4ade80; }
+.tb-toast.error { border: 1.5px solid #ef4444; }
+.tb-toast.error .tb-toast-icon { color: #f87171; }
+.tb-toast.warning { border: 1.5px solid #f59e0b; }
+.tb-toast.warning .tb-toast-icon { color: #fbbf24; }
+.tb-toast.info { border: 1.5px solid #38bdf8; }
+.tb-toast.info .tb-toast-icon { color: #7dd3fc; }
+
+@media (max-width: 600px) {
+  #toast-container {
+    top: max(.75rem, env(safe-area-inset-top));
+    right: .75rem;
+    left: .75rem;
+    max-width: none;
+    align-items: stretch;
+  }
+  .tb-toast {
+    width: 100%;
+    max-width: none;
+    padding: .8rem .9rem;
+    font-size: .86rem;
+  }
+}

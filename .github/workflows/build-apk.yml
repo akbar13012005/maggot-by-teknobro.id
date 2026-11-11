@@ -1,54 +1,126 @@
-name: Build TeknoBro Android APK
+name: Build and distribute TeknoBro Android APK
 
 on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
-jobs:
-  build:
-    name: Build Pure Android APK
-    runs-on: ubuntu-latest
+permissions:
+  contents: write
 
+jobs:
+  build-debug:
+    name: Build installable debug APK
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Setup Gradle 8.4
-        uses: gradle/actions/setup-gradle@v3
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.4'
+          gradle-version: "8.4"
 
-      - name: Accept Android SDK Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Install Android SDK Components
-        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-34"
+      - name: Prepare Android project
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
-      - name: Copy App Icon
-        run: cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
-
-      - name: Write local.properties
-        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-
-      - name: Generate Gradle Wrapper
+      - name: Generate Gradle wrapper
         working-directory: android
         run: gradle wrapper --gradle-version=8.4
 
-      - name: Build Android APK
+      - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK Artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: TeknoBro-Android-App
+          name: TeknoBro-Android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Build signed APK and publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-debug
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.4"
+
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Validate and decode release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || (echo "Missing GitHub Actions secret ANDROID_KEYSTORE_BASE64" && exit 1)
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || (echo "Missing GitHub Actions secret ANDROID_KEYSTORE_PASSWORD" && exit 1)
+          test -n "$ANDROID_KEY_ALIAS" || (echo "Missing GitHub Actions secret ANDROID_KEY_ALIAS" && exit 1)
+          test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing GitHub Actions secret ANDROID_KEY_PASSWORD" && exit 1)
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/teknobro-release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/teknobro-release.jks" >> "$GITHUB_ENV"
+
+      - name: Prepare Android project
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - name: Generate Gradle wrapper
+        working-directory: android
+        run: gradle wrapper --gradle-version=8.4
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ env.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Publish APK on GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TeknoBro ${{ github.ref_name }}
+          generate_release_notes: true
+          files: android/app/build/outputs/apk/release/app-release.apk

@@ -102,6 +102,32 @@ firebase init hosting
 firebase deploy
 ```
 
+
+## 📱 Aplikasi Smartphone (PWA & APK)
+
+### PWA — instal langsung dari website
+1. Pastikan GitHub Pages sudah selesai deploy dari branch `main`.
+2. Buka `https://akbar13012005.github.io/maggot-by-teknobro.id/` melalui Chrome Android.
+3. Pilih menu **Install app / Pasang aplikasi**. Jika tombol instal belum muncul, buka menu Chrome (⋮) lalu pilih **Tambahkan ke layar utama**.
+4. PWA menyimpan app shell agar halaman dapat dibuka kembali saat offline. Monitoring Firebase tetap membutuhkan koneksi internet.
+
+### APK — build otomatis dengan GitHub Actions
+1. Buka tab **Actions** → workflow **Build and distribute TeknoBro Android APK**.
+2. Pilih **Run workflow** untuk membuat APK pengujian, atau tunggu workflow berjalan setelah perubahan masuk ke `main`.
+3. Buka hasil workflow yang sukses, lalu unduh artifact **TeknoBro-Android-debug**.
+4. Ekstrak ZIP artifact dan instal `app-debug.apk` di Android. Pengguna perlu mengizinkan instalasi dari sumber tersebut.
+
+APK Android saat ini memuat aplikasi web dari GitHub Pages melalui WebView, sehingga konten web dan data Firebase memerlukan internet. Pembaruan tampilan web akan tersedia saat aplikasi dibuka kembali setelah cache WebView diperbarui.
+
+### Distribusi APK rilis bertanda tangan digital
+Untuk membagikan APK rilis yang bisa menerima pembaruan tanpa uninstall, buat satu keystore pribadi dan simpan sebagai GitHub Actions Secrets:
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Jangan commit file keystore atau password ke repository. Simpan salinan keystore secara aman; kehilangan keystore berarti tidak dapat menandatangani pembaruan dengan identitas aplikasi yang sama. Setelah secrets tersedia, push tag versi seperti `v1.0.0`; workflow akan membuat APK release bertanda tangan dan melampirkannya ke GitHub Release.
+
 ## 📊 Struktur Database Firebase
 
 ```json
