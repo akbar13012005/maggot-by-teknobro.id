@@ -21,48 +21,188 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Install Capacitor CLI & Dependencies
+      - name: Create Native Android Project
         run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init TeknoBro id.teknobro.maggot --web-dir .
-          npx cap add android
+          mkdir -p android/app/src/main/java/id/teknobro/maggot
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/xml
+          mkdir -p android/app/src/main/res/drawable
 
-      - name: Configure Android App Properties
-        run: |
-          # Pastikan konfigurasi server live update terpasang di capacitor config
-          cat << 'EOF' > capacitor.config.json
-          {
-            "appId": "id.teknobro.maggot",
-            "appName": "TeknoBro",
-            "webDir": ".",
-            "bundledWebRuntime": false,
-            "server": {
-              "url": "https://akbar13012005.github.io/maggot-by-teknobro.id/",
-              "cleartext": true
-            },
-            "android": {
-              "backgroundColor": "#060b1e",
-              "allowMixedContent": true
-            }
+          # Root build.gradle
+          cat << 'EOF' > android/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
           EOF
-          npx cap sync android
 
-      - name: Setup Android Keystore & Build APK
+          # settings.gradle
+          cat << 'EOF' > android/settings.gradle
+          include ':app'
+          rootProject.name = "TeknoBro"
+          EOF
+
+          # gradle.properties
+          cat << 'EOF' > android/gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+          # app/build.gradle
+          cat << 'EOF' > android/app/build.gradle
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace 'id.teknobro.maggot'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "id.teknobro.maggot"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.webkit:webkit:1.10.0'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          # AndroidManifest.xml
+          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/icon"
+                  android:label="TeknoBro"
+                  android:roundIcon="@drawable/icon"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.TeknoBro"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden"
+                      android:theme="@style/Theme.TeknoBro">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # res/values/styles.xml
+          cat << 'EOF' > android/app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.TeknoBro" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="android:statusBarColor">#060b1e</item>
+                  <item name="android:navigationBarColor">#060b1e</item>
+                  <item name="android:windowBackground">#060b1e</item>
+              </style>
+          </resources>
+          EOF
+
+          # Copy Icon
+          cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
+
+          # MainActivity.java (Pure Fullscreen Native WebView)
+          cat << 'EOF' > android/app/src/main/java/id/teknobro/maggot/MainActivity.java
+          package id.teknobro.maggot;
+
+          import android.annotation.SuppressLint;
+          import android.graphics.Color;
+          import android.os.Bundle;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.appcompat.app.AppCompatActivity;
+
+          public class MainActivity extends AppCompatActivity {
+              private WebView webView;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  webView = new WebView(this);
+                  webView.setBackgroundColor(Color.parseColor("#060b1e"));
+                  setContentView(webView);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setLoadsImagesAutomatically(true);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient());
+
+                  webView.loadUrl("https://akbar13012005.github.io/maggot-by-teknobro.id/");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Setup Gradle Wrapper
         working-directory: android
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          gradle wrapper
 
-      - name: Upload APK Artifact
+      - name: Build Debug APK
+        working-directory: android
+        run: |
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload Pure APK
         uses: actions/upload-artifact@v4
         with:
-          name: TeknoBro-Native-App
+          name: TeknoBro-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
