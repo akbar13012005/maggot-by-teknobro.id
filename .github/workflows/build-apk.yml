@@ -21,185 +21,202 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Generate Android Project Files
         run: |
           mkdir -p android/app/src/main/java/id/teknobro/maggot
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/gradle/wrapper
 
           # Root build.gradle
-          cat << 'EOF' > android/build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          EOF
+          cat > android/build.gradle << 'ENDOFFILE'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+    }
+}
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+ENDOFFILE
 
           # settings.gradle
-          cat << 'EOF' > android/settings.gradle
-          include ':app'
-          rootProject.name = "TeknoBro"
-          EOF
+          cat > android/settings.gradle << 'ENDOFFILE'
+include ':app'
+rootProject.name = "TeknoBro"
+ENDOFFILE
 
           # gradle.properties
-          cat << 'EOF' > android/gradle.properties
-          android.useAndroidX=true
-          android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m
-          EOF
+          cat > android/gradle.properties << 'ENDOFFILE'
+android.useAndroidX=true
+android.enableJetifier=true
+org.gradle.jvmargs=-Xmx2048m
+ENDOFFILE
+
+          # gradle-wrapper.properties
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'ENDOFFILE'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+ENDOFFILE
+
+          # gradlew script
+          cat > android/gradlew << 'ENDOFFILE'
+#!/bin/sh
+exec gradle "$@"
+ENDOFFILE
+          chmod +x android/gradlew
 
           # app/build.gradle
-          cat << 'EOF' > android/app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          cat > android/app/build.gradle << 'ENDOFFILE'
+plugins {
+    id 'com.android.application'
+}
 
-          android {
-              namespace 'id.teknobro.maggot'
-              compileSdk 34
+android {
+    namespace 'id.teknobro.maggot'
+    compileSdk 34
 
-              defaultConfig {
-                  applicationId "id.teknobro.maggot"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0.0"
-              }
+    defaultConfig {
+        applicationId "id.teknobro.maggot"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
 
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-                  debug {
-                      minifyEnabled false
-                  }
-              }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
 
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
 
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.webkit:webkit:1.10.0'
-          }
-          EOF
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.10.0'
+}
+ENDOFFILE
 
           # AndroidManifest.xml
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+          cat > android/app/src/main/AndroidManifest.xml << 'ENDOFFILE'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-              <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/icon"
-                  android:label="TeknoBro"
-                  android:roundIcon="@drawable/icon"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.TeknoBro"
-                  android:usesCleartextTraffic="true">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:configChanges="orientation|screenSize|keyboardHidden">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/icon"
+        android:label="TeknoBro"
+        android:roundIcon="@drawable/icon"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TeknoBro"
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+ENDOFFILE
 
           # styles.xml (No Action Bar Fullscreen)
-          cat << 'EOF' > android/app/src/main/res/values/styles.xml
-          <resources>
-              <style name="Theme.TeknoBro" parent="Theme.AppCompat.DayNight.NoActionBar">
-                  <item name="android:windowBackground">#060b1e</item>
-                  <item name="android:statusBarColor">#060b1e</item>
-                  <item name="android:navigationBarColor">#060b1e</item>
-              </style>
-          </resources>
-          EOF
+          cat > android/app/src/main/res/values/styles.xml << 'ENDOFFILE'
+<resources>
+    <style name="Theme.TeknoBro" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#060b1e</item>
+        <item name="android:statusBarColor">#060b1e</item>
+        <item name="android:navigationBarColor">#060b1e</item>
+    </style>
+</resources>
+ENDOFFILE
 
           # Logo icon
           cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
 
           # MainActivity.java (Pure Fullscreen WebView Native)
-          cat << 'EOF' > android/app/src/main/java/id/teknobro/maggot/MainActivity.java
-          package id.teknobro.maggot;
+          cat > android/app/src/main/java/id/teknobro/maggot/MainActivity.java << 'ENDOFFILE'
+package id.teknobro.maggot;
 
-          import android.annotation.SuppressLint;
-          import android.graphics.Color;
-          import android.os.Bundle;
-          import android.webkit.WebChromeClient;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import androidx.appcompat.app.AppCompatActivity;
+import android.annotation.SuppressLint;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends AppCompatActivity {
-              private WebView webView;
+public class MainActivity extends AppCompatActivity {
+    private WebView webView;
 
-              @SuppressLint("SetJavaScriptEnabled")
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
+    @SuppressLint("SetJavaScriptEnabled")
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-                  webView = new WebView(this);
-                  webView.setBackgroundColor(Color.parseColor("#060b1e"));
-                  setContentView(webView);
+        webView = new WebView(this);
+        webView.setBackgroundColor(Color.parseColor("#060b1e"));
+        setContentView(webView);
 
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  settings.setAllowFileAccess(true);
-                  settings.setLoadsImagesAutomatically(true);
-                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setLoadsImagesAutomatically(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
 
-                  webView.loadUrl("https://akbar13012005.github.io/maggot-by-teknobro.id/");
-              }
+        webView.loadUrl("https://akbar13012005.github.io/maggot-by-teknobro.id/");
+    }
 
-              @Override
-              public void onBackPressed() {
-                  if (webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
-              }
-          }
-          EOF
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+}
+ENDOFFILE
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-34" || true
 
       - name: Build Android APK with Gradle
         working-directory: android
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-          gradle assembleDebug --no-daemon
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
