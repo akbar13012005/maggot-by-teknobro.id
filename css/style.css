@@ -2339,3 +2339,97 @@ body {
         gap: 0.5rem;
     }
 }
+
+/* --- PERBAIKAN DITAMBAHKAN DI SINI --- */
+
+/* Status Badge */
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #fff;
+    transition: background-color 0.3s ease;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+.status-badge.online {
+    background-color: #2ec4b6; /* Hijau saat online */
+}
+.status-badge.offline {
+    background-color: #e71d36; /* Merah saat offline */
+}
+
+/* Container Gauge Aesthetic */
+.gauge-container {
+    position: relative;
+    width: 180px;
+    height: 110px;
+    margin: 20px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Penempatan Teks Angka & Derajat (Di Atas Bar) */
+.gauge-value-display {
+    position: absolute;
+    top: 25px; /* Mengangkat angka ke bagian atas bar */
+    z-index: 10;
+    text-align: center;
+}
+
+.gauge-value-display .number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #2b2d42;
+    line-height: 1;
+}
+
+.gauge-value-display .unit {
+    font-size: 14px;
+    color: #8d99ae;
+}
+
+/* Body Bar Lengkung (Semi-Circle Arc) */
+.gauge-body {
+    position: relative;
+    width: 160px;
+    height: 80px;
+    border-top-left-radius: 80px;
+    border-top-right-radius: 80px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.gauge-fill {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #4ea8de, #560bad);
+    transform-origin: center top;
+    transform: rotate(0deg);
+    transition: transform 0.5s ease-out;
+}
+
+.gauge-cover {
+    position: absolute;
+    width: 120px;
+    height: 60px;
+    background: #ffffff;
+    border-top-left-radius: 60px;
+    border-top-right-radius: 60px;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Style Tab Active */
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
