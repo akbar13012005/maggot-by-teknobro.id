@@ -12,7 +12,8 @@
     appId: "1:553245663212:web:76046f6b2ee42eb0d3eac9"
   };
 
-  const DATA_TIMEOUT_MS = 45000; // Firmware mengirim sensor setiap 10 detik.
+  const DATA_FRESH_MS = 20000; // Fresh: dua interval kirim sensor.
+  const DATA_TIMEOUT_MS = 45000; // Offline: lebih dari 45 detik tanpa timestamp baru.
   const $ = (id) => document.getElementById(id);
   let db = null;
   let lastSensorTimestamp = 0;
@@ -104,8 +105,10 @@
     const age = Date.now() - lastSensorTimestamp * 1000;
     if (age < -60000) {
       setDeviceStatus('waiting', 'Waktu perangkat belum tersinkronisasi (NTP)');
-    } else if (age <= DATA_TIMEOUT_MS) {
+    } else if (age <= DATA_FRESH_MS) {
       setDeviceStatus('online', 'Data sensor diterima ' + Math.max(0, Math.round(age / 1000)) + ' detik lalu');
+    } else if (age <= DATA_TIMEOUT_MS) {
+      setDeviceStatus('stale', 'Data sensor terlambat ' + Math.round(age / 1000) + ' detik');
     } else {
       setDeviceStatus('offline', 'Tidak ada data sensor baru selama ' + Math.round(age / 1000) + ' detik');
     }
