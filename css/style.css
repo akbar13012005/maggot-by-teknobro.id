@@ -2549,3 +2549,92 @@ body {
     font-size: .86rem;
   }
 }
+
+
+/* ---------- Device icon alignment + active fan animation ---------- */
+.device-icon-wrap {
+    flex: 0 0 50px;
+    line-height: 1;
+}
+
+.device-icon-wrap > i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1;
+    transform-origin: 50% 50%;
+}
+
+#icon-kipas.fan-spinning {
+    animation: teknobro-fan-spin 1s linear infinite;
+    will-change: transform;
+}
+
+@keyframes teknobro-fan-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Keep both device cards and their icons aligned side-by-side on phones. */
+@media (max-width: 768px) {
+    .controls-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+        gap: .75rem;
+    }
+
+    .device-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-width: 0;
+        min-height: 250px;
+        padding: 1.25rem .65rem;
+    }
+
+    .device-status-ring {
+        flex: 0 0 72px;
+        width: 72px;
+        height: 72px;
+        margin: 0 auto .9rem;
+    }
+
+    .device-icon-wrap {
+        flex-basis: 46px;
+        width: 46px;
+        height: 46px;
+        font-size: 1.25rem;
+    }
+
+    .device-card h4 {
+        min-height: 1.4em;
+        margin-top: .1rem;
+    }
+
+    .device-card p {
+        min-height: 2.2em;
+        margin-bottom: .55rem;
+    }
+
+    .device-status {
+        margin-bottom: .8rem;
+    }
+
+    .device-card .toggle-switch {
+        margin-top: auto;
+    }
+}
+
+@media (max-width: 360px) {
+    .controls-grid { gap: .55rem; }
+    .device-card { padding-inline: .45rem; }
+    .device-card h4 { font-size: .92rem; }
+    .device-card p { font-size: .7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #icon-kipas.fan-spinning { animation: none; }
+}
