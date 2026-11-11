@@ -25,6 +25,7 @@
 #include <WiFiMulti.h>
 #include <Preferences.h>
 #include <Firebase_ESP_Client.h>
+#include <addons/TokenHelper.h>  // Log status pembuatan dan refresh token Firebase
 #include <Wire.h>
 #include <Adafruit_SHT31.h>
 #include <time.h>
@@ -304,6 +305,8 @@ void setupFirebase() {
         return;
     }
 
+    config.token_status_callback = tokenStatusCallback;
+    fbData.setBSSLBufferSize(4096, 1024);
     Firebase.begin(&config, &auth);
     Firebase.reconnectWiFi(true);
     firebaseReady = false; // Token dibuat asynchronous; loop() akan menunggu Firebase.ready().
