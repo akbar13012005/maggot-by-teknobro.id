@@ -39,16 +39,18 @@ teknobro-maggot-monitor/
 1. Buka [Firebase Console](https://console.firebase.google.com/)
 2. Buat project baru
 3. Aktifkan **Realtime Database**
-4. Atur rules database:
+4. Aktifkan Authentication > Sign-in method > **Anonymous** untuk pengujian awal. Dashboard web dan firmware ESP32 melakukan anonymous sign-in sebelum mengakses RTDB.
+5. Untuk pengujian awal, gunakan rules yang mensyaratkan autentikasi:
    ```json
    {
      "rules": {
-       ".read": true,
-       ".write": true
+       ".read": "auth != null",
+       ".write": "auth != null"
      }
    }
    ```
-5. Salin konfigurasi Firebase ke `js/app.js`
+   **Peringatan:** rules di atas hanya baseline pengujian, bukan otorisasi produksi karena setiap pengguna anonim dapat memperoleh akses. Sebelum aplikasi dipublikasikan untuk umum, batasi akses per UID/perangkat dan per path (sensor, control, status, history, wifi_config), serta validasi nilai yang ditulis.
+6. Salin konfigurasi Firebase ke `js/app.js`
 
 ### 2. Konfigurasi Web App
 
