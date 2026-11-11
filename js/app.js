@@ -223,6 +223,10 @@
     setText('device-status-' + suffix, on ? 'ON' : 'OFF');
     $('card-' + suffix)?.classList.toggle('device-on', on);
     $('ring-' + suffix)?.classList.toggle('active', on);
+
+    // Animate the fan only while the cooling output is actually ON.
+    const fanIcon = $('icon-kipas');
+    if (fanIcon) fanIcon.classList.toggle('fan-spinning', key === 'kipas_peltier' && on);
   }
 
   async function writeControl(key, value) {
