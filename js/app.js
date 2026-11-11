@@ -224,9 +224,18 @@
     $('card-' + suffix)?.classList.toggle('device-on', on);
     $('ring-' + suffix)?.classList.toggle('active', on);
 
-    // Animate the fan only while the cooling output is actually ON.
+    // Drive the fan animation directly from the confirmed cooling state.
+    // Inline animation avoids CSS/media-query overrides in Android WebView.
     const fanIcon = $('icon-kipas');
-    if (fanIcon) fanIcon.classList.toggle('fan-spinning', key === 'kipas_peltier' && on);
+    if (fanIcon) {
+      const fanOn = key === 'kipas_peltier' && on === true;
+      fanIcon.classList.toggle('fan-spinning', fanOn);
+      fanIcon.style.setProperty(
+        'animation',
+        fanOn ? 'teknobro-fan-spin 1s linear infinite' : 'none',
+        'important'
+      );
+    }
   }
 
   async function writeControl(key, value) {
@@ -255,7 +264,13 @@
   };
   window.toggleDevice = async (key, checked) => {
     if (latestControl.mode !== 'manual') { toast('Ubah ke mode Manual terlebih dahulu.', 'error'); updateDevice(key, !!latestControl[key]); return; }
-    if (await writeControl(key, !!checked)) toast((key === 'kipas_peltier' ? 'Pendingin ' : 'Pemanas ') + (checked ? 'ON' : 'OFF'));
+    if (await writeControl(key, !!checked)) {
+      // Reflect the successfully written state immediately; RTDB listener will keep it synchronized.
+      updateDevice(key, !!checked);
+      toast((key === 'kipas_peltier' ? 'Pendingin ' : 'Pemanas ') + (checked ? 'ON' : 'OFF'), 'success');
+    } else {
+      updateDevice(key, !!latestControl[key]);
+    }
   };
 
   function renderHistory() {

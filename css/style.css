@@ -2638,3 +2638,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
     #icon-kipas.fan-spinning { animation: none; }
 }
+
+
+/* Android WebView-safe fan animation: keep the icon itself rotating. */
+#icon-kipas.fan-spinning {
+    display: inline-flex;
+    transform-origin: 50% 50%;
+    animation: teknobro-fan-spin 1s linear infinite !important;
+}
+@keyframes teknobro-fan-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
