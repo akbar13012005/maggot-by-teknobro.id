@@ -13,7 +13,6 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -33,10 +32,10 @@ public class MainActivity extends AppCompatActivity {
         webView.setBackgroundColor(Color.parseColor("#060b1e"));
         setContentView(webView);
 
-        // Kunci scrolling horizontal & overscroll agar rasa aplikasi native murni
-        webView.setHorizontalScrollBarEnabled(false);
+        // Scrolling native yang lancar dan responsif
         webView.setVerticalScrollBarEnabled(true);
-        webView.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setScrollBarStyle(WebView.SCROLLBARS_INSIDE_OVERLAY);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -47,18 +46,13 @@ public class MainActivity extends AppCompatActivity {
         settings.setLoadsImagesAutomatically(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        // Kunci Zoom in & Zoom out murni
+        // Kunci zoom agar tidak ada gesture pinch yang merusak layout
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
 
-        // Responsive viewport handling
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
-
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
-            // Tangani dialog file upload (Pilih file firmware .bin)
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mFilePathCallback != null) {
@@ -79,9 +73,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Request runtime permissions jika dibutuhkan (Bluetooth & Location)
         checkAndRequestPermissions();
-
         webView.loadUrl("https://akbar13012005.github.io/maggot-by-teknobro.id/");
     }
 

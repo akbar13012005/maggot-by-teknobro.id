@@ -60,13 +60,8 @@ let db = null;
 // ========== INITIALIZATION ===============
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Kunci Zoom in / Zoom out & gestures di mobile browser
+    // Prevent accidental multi-touch pinch zoom
     document.addEventListener('gesturestart', (e) => e.preventDefault());
-    document.addEventListener('touchmove', (e) => {
-        if (e.touches && e.touches.length > 1) {
-            e.preventDefault();
-        }
-    }, { passive: false });
 
     // Handle orientation change & resize gracefully
     window.addEventListener('resize', handleWindowResize);
@@ -292,140 +287,170 @@ function startDemoMode() {
 // ==========================================
 function updateMonitoringUI() {
     // Update stat values
-    document.getElementById('val-suhu-media').textContent = state.suhuMedia.toFixed(1) + '°C';
-    document.getElementById('val-kelembaban').textContent = state.kelembaban.toFixed(1) + '%';
-    document.getElementById('val-target').textContent = state.targetSuhu.toFixed(1) + '°C';
+    const suhuMediaEl = document.getElementById('val-suhu-media');
+    const kelembabanEl = document.getElementById('val-kelembaban');
+    const targetEl = document.getElementById('val-target');
+
+    if (suhuMediaEl) suhuMediaEl.textContent = state.suhuMedia > 0 ? state.suhuMedia.toFixed(1) + '°C' : '--.-°C';
+    if (kelembabanEl) kelembabanEl.textContent = state.kelembaban > 0 ? state.kelembaban.toFixed(1) + '%' : '--.-%';
+    if (targetEl) targetEl.textContent = state.targetSuhu.toFixed(1) + '°C';
 
     // Update suhu status
     const suhuStatus = document.getElementById('status-suhu-media');
-    const diff = state.suhuMedia - state.targetSuhu;
-    if (Math.abs(diff) <= 1) {
-        suhuStatus.textContent = 'Ideal';
-        suhuStatus.className = 'stat-status ideal';
-    } else if (diff < -1) {
-        suhuStatus.textContent = 'Di bawah target';
-        suhuStatus.className = 'stat-status dingin';
-    } else if (diff > 1 && diff <= 3) {
-        suhuStatus.textContent = 'Sedikit panas';
-        suhuStatus.className = 'stat-status hangat';
-    } else {
-        suhuStatus.textContent = 'Terlalu panas!';
-        suhuStatus.className = 'stat-status panas';
+    if (suhuStatus) {
+        if (state.suhuMedia === 0) {
+            suhuStatus.textContent = 'Menunggu ESP32...';
+            suhuStatus.className = 'stat-status dingin';
+        } else {
+            const diff = state.suhuMedia - state.targetSuhu;
+            if (Math.abs(diff) <= 1) {
+                suhuStatus.textContent = 'Suhu Ideal';
+                suhuStatus.className = 'stat-status ideal';
+            } else if (diff < -1) {
+                suhuStatus.textContent = 'Di Bawah Target';
+                suhuStatus.className = 'stat-status dingin';
+            } else if (diff > 1 && diff <= 3) {
+                suhuStatus.textContent = 'Sedikit Panas';
+                suhuStatus.className = 'stat-status hangat';
+            } else {
+                suhuStatus.textContent = 'Terlalu Panas!';
+                suhuStatus.className = 'stat-status panas';
+            }
+        }
     }
 
-    // Update kelembaban status
-    const kelStatus = document.getElementById('status-kelembaban');
-    kelStatus.textContent = 'RH';
-    kelStatus.className = 'stat-status';
-
-    // Update mode status
-    const modeStatus = document.getElementById('status-mode');
-    modeStatus.textContent = 'Mode ' + (state.mode === 'auto' ? 'Auto' : 'Manual');
-    modeStatus.className = 'stat-status ' + (state.mode === 'auto' ? 'ideal' : 'hangat');
+    // Update target status badge
+    const targetStatus = document.getElementById('status-target');
+    if (targetStatus) {
+        targetStatus.textContent = 'Mode ' + (state.mode === 'auto' ? 'Auto' : 'Manual');
+        targetStatus.className = 'stat-status ' + (state.mode === 'auto' ? 'ideal' : 'hangat');
+    }
 
     // Update gauge
     updateGauge(state.suhuMedia);
 }
 
 function updateGauge(temp) {
-    // Map temperature 20-45 to arc length (0-377)
     const minTemp = 20;
     const maxTemp = 45;
-    const totalArc = 377;
+    const totalArc = 267; // Panjang busur SVG gauge (radius 85)
 
-    const clampedTemp = Math.max(minTemp, Math.min(maxTemp, temp));
+    const val = typeof temp === 'number' && !isNaN(temp) ? temp : 0;
+    const clampedTemp = Math.max(minTemp, Math.min(maxTemp, val > 0 ? val : minTemp));
     const ratio = (clampedTemp - minTemp) / (maxTemp - minTemp);
-    const arcLen = ratio * totalArc;
+    const offset = totalArc - (ratio * totalArc);
 
-    const arc = document.getElementById('gaugeArc');
-    arc.setAttribute('stroke-dasharray', `${arcLen}, ${totalArc}`);
-
-    // Update needle rotation (-90 to 90 degrees)
-    const angle = -90 + (ratio * 180);
-    const needle = document.getElementById('gaugeNeedle');
-    needle.setAttribute('transform', `rotate(${angle}, 150, 170)`);
+    const fill = document.getElementById('gaugeFill');
+    if (fill) {
+        fill.style.strokeDashoffset = val > 0 ? offset : totalArc;
+    }
 
     // Update display value
-    document.getElementById('gaugeTemp').textContent = temp.toFixed(1);
+    const tempEl = document.getElementById('gaugeTemp');
+    if (tempEl) {
+        tempEl.textContent = val > 0 ? val.toFixed(1) : '--.-';
+    }
 }
 
 function updateControlUI() {
     // Mode buttons
-    const btnAuto = document.getElementById('btn-mode-auto');
-    const btnManual = document.getElementById('btn-mode-manual');
+    const btnAuto = document.getElementById('modeAutoBtn');
+    const btnManual = document.getElementById('modeManualBtn');
 
-    btnAuto.classList.toggle('active', state.mode === 'auto');
-    btnManual.classList.toggle('active', state.mode === 'manual');
+    if (btnAuto) btnAuto.classList.toggle('active', state.mode === 'auto');
+    if (btnManual) btnManual.classList.toggle('active', state.mode === 'manual');
 
-    // Target
-    document.getElementById('targetInput').value = state.targetSuhu.toFixed(1);
-    document.getElementById('targetSlider').value = state.targetSuhu;
+    // Target inputs
+    const targetInput = document.getElementById('targetInput');
+    const targetSlider = document.getElementById('targetSlider');
+    if (targetInput) targetInput.value = state.targetSuhu.toFixed(1);
+    if (targetSlider) targetSlider.value = state.targetSuhu;
 
     // Manual controls
     const isManual = state.mode === 'manual';
     const manualHint = document.getElementById('manualHint');
-    manualHint.textContent = isManual
-        ? 'Anda dapat mengontrol perangkat secara manual'
-        : 'Aktifkan mode Manual untuk mengontrol perangkat secara langsung';
+    if (manualHint) {
+        manualHint.textContent = isManual
+            ? 'Mode Manual aktif — Anda dapat menyalakan/mematikan perangkat langsung'
+            : 'Aktifkan mode Manual untuk mengontrol perangkat secara langsung';
+    }
 
     const cardKipas = document.getElementById('card-kipas');
     const cardLampu = document.getElementById('card-lampu');
-    cardKipas.classList.toggle('disabled', !isManual);
-    cardLampu.classList.toggle('disabled', !isManual);
+    if (cardKipas) cardKipas.classList.toggle('disabled', !isManual);
+    if (cardLampu) cardLampu.classList.toggle('disabled', !isManual);
 
     // Toggle switches
     const toggleKipas = document.getElementById('toggle-kipas');
     const toggleLampu = document.getElementById('toggle-lampu');
-    toggleKipas.disabled = !isManual;
-    toggleLampu.disabled = !isManual;
-    toggleKipas.checked = state.kipas_peltier;
-    toggleLampu.checked = state.lampu_pemanas;
+    if (toggleKipas) {
+        toggleKipas.disabled = !isManual;
+        toggleKipas.checked = state.kipas_peltier;
+    }
+    if (toggleLampu) {
+        toggleLampu.disabled = !isManual;
+        toggleLampu.checked = state.lampu_pemanas;
+    }
 
     // Device status rings
     const ringKipas = document.getElementById('ring-kipas');
     const ringLampu = document.getElementById('ring-lampu');
-    ringKipas.classList.toggle('active', state.kipas_peltier);
-    ringLampu.classList.toggle('active', state.lampu_pemanas);
+    if (ringKipas) ringKipas.classList.toggle('active', state.kipas_peltier);
+    if (ringLampu) ringLampu.classList.toggle('active', state.lampu_pemanas);
 
     // Device status text
     const statusKipas = document.getElementById('device-status-kipas');
     const statusLampu = document.getElementById('device-status-lampu');
-    statusKipas.textContent = state.kipas_peltier ? 'ON' : 'OFF';
-    statusKipas.classList.toggle('on', state.kipas_peltier);
-    statusLampu.textContent = state.lampu_pemanas ? 'ON' : 'OFF';
-    statusLampu.classList.toggle('on', state.lampu_pemanas);
+    if (statusKipas) {
+        statusKipas.textContent = state.kipas_peltier ? 'ON' : 'OFF';
+        statusKipas.classList.toggle('on', state.kipas_peltier);
+    }
+    if (statusLampu) {
+        statusLampu.textContent = state.lampu_pemanas ? 'ON' : 'OFF';
+        statusLampu.classList.toggle('on', state.lampu_pemanas);
+    }
 
     // Fan animation
     const iconKipas = document.getElementById('icon-kipas');
-    iconKipas.classList.toggle('fan-spinning', state.kipas_peltier);
+    if (iconKipas) {
+        iconKipas.classList.toggle('fan-spinning', state.kipas_peltier);
+    }
 }
 
 function updateStatusUI() {
-    const badge = document.getElementById('statusBadge');
-    const text = document.getElementById('statusText');
+    const badge = document.getElementById('liveBadge') || document.getElementById('statusBadge');
+    const text = document.getElementById('badgeText') || document.getElementById('statusText');
     const mobileDot = document.getElementById('mobile-status-dot');
 
-    if (state.isOnline) {
-        badge.className = 'status-badge online';
-        text.textContent = 'ONLINE';
-        mobileDot.className = 'status-dot online';
-    } else {
-        badge.className = 'status-badge offline';
-        text.textContent = 'OFFLINE';
-        mobileDot.className = 'status-dot offline';
+    if (badge && text) {
+        if (state.isOnline) {
+            badge.className = 'live-badge online';
+            text.textContent = 'ONLINE';
+        } else {
+            badge.className = 'live-badge offline';
+            text.textContent = 'OFFLINE';
+        }
+    }
+
+    if (mobileDot) {
+        mobileDot.className = 'status-dot ' + (state.isOnline ? 'online' : 'offline');
     }
 
     // Sidebar summary status
-    document.getElementById('summary-status').innerHTML = state.isOnline
-        ? '<span class="status-dot online"></span> Online'
-        : '<span class="status-dot offline"></span> Offline';
+    const summaryStatus = document.getElementById('summary-status');
+    if (summaryStatus) {
+        summaryStatus.innerHTML = state.isOnline
+            ? '<span class="status-dot online"></span> Online'
+            : '<span class="status-dot offline"></span> Offline';
+    }
 }
 
 function updateSummaryUI() {
-    document.getElementById('summary-mode').textContent = state.mode === 'auto' ? 'Auto' : 'Manual';
-    document.getElementById('summary-target').textContent = state.targetSuhu.toFixed(1) + '°C';
-    document.getElementById('summary-kipas').textContent = state.kipas_peltier ? 'ON' : 'OFF';
-    document.getElementById('summary-pemanas').textContent = state.lampu_pemanas ? 'ON' : 'OFF';
+    const summaryMode = document.getElementById('summary-mode');
+    const summaryTarget = document.getElementById('summary-target');
+
+    if (summaryMode) summaryMode.textContent = state.mode === 'auto' ? 'Auto' : 'Manual';
+    if (summaryTarget) summaryTarget.textContent = state.targetSuhu.toFixed(1) + '°C';
 }
 
 // ==========================================
