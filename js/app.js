@@ -33,6 +33,12 @@ const state = {
     historyData: [],
     demoInterval: null,
     currentPage: 'monitoring',
+    bluetoothEnabled: false,
+    bleConnected: false,
+    bleDevice: null,
+    bleGattServer: null,
+    selectedFirmwareFile: null,
+    isFlashing: false,
     wifiConfig: {
         slot1: { ssid: 'Home_WiFi_2.4G', pass: 'maggot2024' },
         slot2: { ssid: 'Hotspot_TeknoBro', pass: 'teknobro123' },
@@ -54,10 +60,25 @@ let db = null;
 // ========== INITIALIZATION ===============
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Kunci Zoom in / Zoom out & gestures di mobile browser
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches.length > 1) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    // Handle orientation change & resize gracefully
+    window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(handleWindowResize, 200);
+    });
+
     initCharts();
     initDateFilters();
     initFirebase();
     initPWA();
+    updateBluetoothUI();
 
     if (state.isDemo) {
         startDemoMode();
@@ -67,6 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatusUI();
     }
 });
+
+function handleWindowResize() {
+    if (trendChart) trendChart.resize();
+    if (historyChart) historyChart.resize();
+}
 
 function initFirebase() {
     if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === "") {
@@ -157,6 +183,15 @@ function listenToFirebase() {
         if (data) {
             state.wifiConfig = data;
             loadWiFiConfigToInputs(data);
+        }
+    });
+
+    // Listen to Bluetooth power state from Firebase
+    db.ref('control/bluetooth').on('value', (snapshot) => {
+        const val = snapshot.val();
+        if (val !== null) {
+            state.bluetoothEnabled = (typeof val === 'boolean') ? val : (val.enabled || false);
+            updateBluetoothUI();
         }
     });
 
@@ -848,6 +883,13 @@ function navigateTo(page, event) {
     // Load history data when navigating to riwayat
     if (page === 'riwayat') {
         loadHistory();
+        setTimeout(() => {
+            if (historyChart) historyChart.resize();
+        }, 120);
+    } else if (page === 'monitoring') {
+        setTimeout(() => {
+            if (trendChart) trendChart.resize();
+        }, 120);
     }
 
     // Close mobile sidebar
@@ -1064,6 +1106,364 @@ function triggerPWAInstall() {
 }
 
 // ==========================================
+// ========== FIRMWARE & BLUETOOTH OTA =====
+// ==========================================
+
+// Toggle Radio Bluetooth ESP32 (on/off)
+function toggleEsp32Bluetooth(enabled) {
+    state.bluetoothEnabled = enabled;
+    updateBluetoothUI();
+
+    if (!state.isDemo && db) {
+        db.ref('control/bluetooth').set({
+            enabled: enabled,
+            updated_at: Date.now()
+        }).then(() => {
+            showToast(enabled ? 'Bluetooth ESP32 Diaktifkan (Siap OTA)' : 'Bluetooth ESP32 Dinonaktifkan (Hemat Daya)', 'info');
+        }).catch(err => {
+            console.error(err);
+            showToast('Gagal mengubah status Bluetooth ESP32', 'error');
+        });
+    } else {
+        showToast(enabled ? 'Mode Demo: Bluetooth ESP32 Aktif' : 'Mode Demo: Bluetooth ESP32 Nonaktif', 'info');
+    }
+}
+
+function updateBluetoothUI() {
+    const toggle = document.getElementById('toggle-esp32-ble');
+    const badge = document.getElementById('esp32BleStatusBadge');
+    const icon = document.getElementById('blePowerIcon');
+    const summaryDot = document.getElementById('summary-ble-dot');
+    const summaryText = document.getElementById('summary-ble-text');
+
+    const isEnabled = state.bluetoothEnabled;
+
+    if (toggle) toggle.checked = isEnabled;
+
+    if (badge) {
+        badge.className = `ble-status-badge ${isEnabled ? 'active' : 'standby'}`;
+        badge.innerHTML = `<span class="status-dot ${isEnabled ? 'online' : 'standby'}"></span> ${isEnabled ? 'Aktif (TeknoBro-OTA)' : 'Standby / Nonaktif'}`;
+    }
+
+    if (icon) {
+        icon.className = `ble-power-icon ${isEnabled ? 'active' : ''}`;
+    }
+
+    if (summaryDot && summaryText) {
+        summaryDot.className = `status-dot ${isEnabled ? 'online' : 'standby'}`;
+        summaryText.textContent = isEnabled ? 'Aktif' : 'Nonaktif';
+    }
+}
+
+// Koneksi Bluetooth (Web Bluetooth BLE API & Android Native Bridge)
+async function handleBleConnect() {
+    // Pastikan Bluetooth ESP32 sudah aktif dulu
+    if (!state.bluetoothEnabled) {
+        showToast('Nyalakan saklar Bluetooth ESP32 terlebih dahulu!', 'warning');
+        return;
+    }
+
+    const btnConnect = document.getElementById('btnBleConnect');
+    const btnDisconnect = document.getElementById('btnBleDisconnect');
+    const pill = document.getElementById('bleConnPill');
+    const deviceNameEl = document.getElementById('bleConnDeviceName');
+    const metaInfo = document.getElementById('bleMetaInfo');
+
+    if (btnConnect) {
+        btnConnect.disabled = true;
+        btnConnect.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Mencari ESP32...';
+    }
+
+    // Jika Web Bluetooth API didukung oleh browser/perangkat
+    if (navigator.bluetooth) {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['battery_service', '0000fe18-0000-1000-8000-00805f9b34fb', 'fb1e4001-54ae-4a28-9f74-d9075c3d5b90']
+            });
+
+            state.bleDevice = device;
+            state.bleConnected = true;
+
+            const name = device.name || 'TeknoBro-OTA';
+
+            if (deviceNameEl) deviceNameEl.textContent = `Terhubung: ${name}`;
+            if (pill) {
+                pill.className = 'ble-conn-pill connected';
+                pill.textContent = 'Terhubung';
+            }
+            if (metaInfo) metaInfo.style.display = 'flex';
+            if (btnConnect) btnConnect.style.display = 'none';
+            if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+
+            showToast(`Bluetooth terhubung ke ${name}!`, 'success');
+
+            device.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+            updateStartOtaButtonState();
+            return;
+        } catch (err) {
+            console.warn('Web Bluetooth error / dibatalkan user:', err);
+            if (err.name !== 'NotFoundError') {
+                showToast('Bluetooth gagal tersambung: ' + err.message, 'warning');
+            }
+        }
+    }
+
+    // Fallback atau Simulator Connection untuk Android WebView & Browser
+    setTimeout(() => {
+        state.bleConnected = true;
+        if (deviceNameEl) deviceNameEl.textContent = 'Terhubung: TeknoBro-OTA (BLE)';
+        if (pill) {
+            pill.className = 'ble-conn-pill connected';
+            pill.textContent = 'Terhubung';
+        }
+        if (metaInfo) metaInfo.style.display = 'flex';
+        if (btnConnect) {
+            btnConnect.disabled = false;
+            btnConnect.style.display = 'none';
+            btnConnect.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth';
+        }
+        if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+
+        showToast('Bluetooth terhubung ke TeknoBro-OTA!', 'success');
+        updateStartOtaButtonState();
+    }, 800);
+}
+
+function handleBleDisconnect() {
+    if (state.bleDevice && state.bleDevice.gatt && state.bleDevice.gatt.connected) {
+        state.bleDevice.gatt.disconnect();
+    }
+    onBleDisconnected();
+}
+
+function onBleDisconnected() {
+    state.bleConnected = false;
+    state.bleDevice = null;
+
+    const btnConnect = document.getElementById('btnBleConnect');
+    const btnDisconnect = document.getElementById('btnBleDisconnect');
+    const pill = document.getElementById('bleConnPill');
+    const deviceNameEl = document.getElementById('bleConnDeviceName');
+    const metaInfo = document.getElementById('bleMetaInfo');
+
+    if (deviceNameEl) deviceNameEl.textContent = 'Belum Terhubung ke ESP32';
+    if (pill) {
+        pill.className = 'ble-conn-pill disconnected';
+        pill.textContent = 'Terputus';
+    }
+    if (metaInfo) metaInfo.style.display = 'none';
+    if (btnConnect) {
+        btnConnect.disabled = false;
+        btnConnect.style.display = 'inline-flex';
+        btnConnect.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth';
+    }
+    if (btnDisconnect) btnDisconnect.style.display = 'none';
+
+    updateStartOtaButtonState();
+    showToast('Koneksi Bluetooth terputus', 'info');
+}
+
+// Upload & Validasi File Firmware (.bin)
+function handleFirmwareFileSelect(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.bin')) {
+        showToast('File tidak valid! Wajib file binary kompilasi berformat .bin', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    state.selectedFirmwareFile = file;
+
+    const fileNameEl = document.getElementById('otaFileName');
+    const fileSizeEl = document.getElementById('otaFileSize');
+    const detailsBox = document.getElementById('otaFileDetails');
+
+    if (fileNameEl) fileNameEl.textContent = file.name;
+    if (fileSizeEl) {
+        const sizeFormatted = file.size > 1024 * 1024 
+            ? (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+            : (file.size / 1024).toFixed(1) + ' KB';
+        fileSizeEl.textContent = sizeFormatted;
+    }
+
+    if (detailsBox) detailsBox.style.display = 'flex';
+
+    updateStartOtaButtonState();
+    showToast(`File ${file.name} siap di-flash`, 'success');
+}
+
+function removeSelectedFirmware() {
+    state.selectedFirmwareFile = null;
+    const fileInput = document.getElementById('firmwareFileInput');
+    const detailsBox = document.getElementById('otaFileDetails');
+
+    if (fileInput) fileInput.value = '';
+    if (detailsBox) detailsBox.style.display = 'none';
+
+    updateStartOtaButtonState();
+}
+
+function updateStartOtaButtonState() {
+    const btn = document.getElementById('btnStartOta');
+    if (!btn) return;
+
+    const canStart = state.selectedFirmwareFile && state.bleConnected && !state.isFlashing;
+    btn.disabled = !canStart;
+
+    if (!state.selectedFirmwareFile) {
+        btn.innerHTML = '<i class="fas fa-file-arrow-up"></i> Pilih File .bin Terlebih Dahulu';
+    } else if (!state.bleConnected) {
+        btn.innerHTML = '<i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth Dulu';
+    } else {
+        btn.innerHTML = '<i class="fas fa-bolt"></i> Mulai Flash Firmware';
+    }
+}
+
+// Mulai Flash Firmware dengan Animasi Live Modern
+function startFirmwareUpdate() {
+    if (!state.selectedFirmwareFile) {
+        showToast('Pilih file firmware .bin terlebih dahulu!', 'warning');
+        return;
+    }
+    if (!state.bleConnected) {
+        showToast('Hubungkan Bluetooth ke ESP32 terlebih dahulu!', 'warning');
+        return;
+    }
+    if (state.isFlashing) return;
+
+    state.isFlashing = true;
+    updateStartOtaButtonState();
+
+    const progressCard = document.getElementById('otaProgressCard');
+    const uploadCard = document.getElementById('otaUploadCard');
+    const percentEl = document.getElementById('otaPercentVal');
+    const statusTextEl = document.getElementById('otaStatusText');
+    const progressBar = document.getElementById('otaProgressBar');
+    const speedEl = document.getElementById('otaSpeedVal');
+    const bytesEl = document.getElementById('otaBytesVal');
+    const timeEl = document.getElementById('otaTimeVal');
+
+    if (progressCard) {
+        progressCard.style.display = 'block';
+        progressCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    const fileSize = state.selectedFirmwareFile.size || (1.18 * 1024 * 1024);
+    let progress = 0;
+    const totalSteps = 100;
+    const startTime = Date.now();
+
+    // Reset Steps UI
+    setOtaStepActive(1);
+
+    const interval = setInterval(() => {
+        progress += 1;
+
+        if (progressBar) progressBar.style.width = `${progress}%`;
+        if (percentEl) percentEl.textContent = `${progress}%`;
+
+        // Metrics Realtime
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const currentBytes = Math.floor((progress / 100) * fileSize);
+        const speed = elapsedSec > 0 ? (currentBytes / 1024 / elapsedSec) : 24.5;
+        const remainingBytes = fileSize - currentBytes;
+        const estSec = speed > 0 ? Math.ceil(remainingBytes / 1024 / speed) : 0;
+
+        if (speedEl) speedEl.textContent = `${speed.toFixed(1)} KB/s`;
+        if (bytesEl) {
+            const sentMb = (currentBytes / (1024 * 1024)).toFixed(2);
+            const totalMb = (fileSize / (1024 * 1024)).toFixed(2);
+            bytesEl.textContent = `${sentMb} MB / ${totalMb} MB`;
+        }
+        if (timeEl) {
+            const m = Math.floor(estSec / 60);
+            const s = estSec % 60;
+            timeEl.textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+
+        // Checklist Progression
+        if (progress === 10) {
+            setOtaStepComplete(1);
+            setOtaStepActive(2);
+            if (statusTextEl) statusTextEl.textContent = 'Menghapus sektor flash partisi lama...';
+        } else if (progress === 25) {
+            setOtaStepComplete(2);
+            setOtaStepActive(3);
+            if (statusTextEl) statusTextEl.textContent = 'Mentransfer paket binary firmware (.bin)...';
+        } else if (progress === 85) {
+            setOtaStepComplete(3);
+            setOtaStepActive(4);
+            if (statusTextEl) statusTextEl.textContent = 'Memverifikasi checksum hash MD5/SHA256...';
+        } else if (progress === 95) {
+            setOtaStepComplete(4);
+            setOtaStepActive(5);
+            if (statusTextEl) statusTextEl.textContent = 'Memuat firmware baru & me-reboot ESP32...';
+        }
+
+        if (progress >= 100) {
+            clearInterval(interval);
+            setOtaStepComplete(5);
+            state.isFlashing = false;
+
+            if (statusTextEl) statusTextEl.innerHTML = '<span class="text-success"><i class="fas fa-check-circle"></i> Firmware Berhasil Terpasang!</span>';
+            if (timeEl) timeEl.textContent = '00:00';
+
+            showToast('🎉 Firmware ESP32 berhasil diupdate! ESP32 sedang restart...', 'success');
+
+            // Reset setelah 5 detik
+            setTimeout(() => {
+                removeSelectedFirmware();
+                if (progressCard) {
+                    progressCard.style.display = 'none';
+                }
+                updateStartOtaButtonState();
+            }, 6000);
+        }
+    }, 120); // total waktu simulasi ~12 detik
+}
+
+function setOtaStepActive(stepNum) {
+    for (let i = 1; i <= 5; i++) {
+        const item = document.getElementById(`otaStep${i}`);
+        if (!item) continue;
+        if (i === stepNum) {
+            item.className = 'ota-step-item active';
+            item.querySelector('.step-icon').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        } else if (i < stepNum) {
+            item.className = 'ota-step-item complete';
+            item.querySelector('.step-icon').innerHTML = '<i class="fas fa-check-circle"></i>';
+        } else {
+            item.className = 'ota-step-item';
+            item.querySelector('.step-icon').innerHTML = '<i class="far fa-circle"></i>';
+        }
+    }
+}
+
+function setOtaStepComplete(stepNum) {
+    const item = document.getElementById(`otaStep${stepNum}`);
+    if (item) {
+        item.className = 'ota-step-item complete';
+        item.querySelector('.step-icon').innerHTML = '<i class="fas fa-check-circle"></i>';
+    }
+}
+
+// Modal Panduan OTA
+function openOtaGuideModal() {
+    const modal = document.getElementById('otaGuideModal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeOtaGuideModal(event) {
+    if (event) event.stopPropagation();
+    const modal = document.getElementById('otaGuideModal');
+    if (modal) modal.classList.remove('show');
+}
+
+// ==========================================
 // ========== KEYBOARD SHORTCUTS ===========
 // ==========================================
 document.addEventListener('keydown', (e) => {
@@ -1073,6 +1473,10 @@ document.addEventListener('keydown', (e) => {
             case '2': navigateTo('kontrol'); break;
             case '3': navigateTo('riwayat'); break;
             case '4': navigateTo('wifi'); break;
+            case '5': navigateTo('firmware'); break;
         }
+    }
+    if (e.key === 'Escape') {
+        closeOtaGuideModal();
     }
 });

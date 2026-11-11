@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="TeknoBro - Monitoring & Kontrol Suhu Maggot BSF berbasis IoT">
     <meta name="theme-color" content="#060b1e">
     <title>TeknoBro - Monitoring Suhu Maggot</title>
@@ -81,6 +81,13 @@
                     <span class="nav-subtitle">SSID & password ESP32</span>
                 </div>
             </a>
+            <a href="#" class="nav-item" data-page="firmware" onclick="navigateTo('firmware', event)">
+                <div class="nav-icon"><i class="fas fa-microchip"></i></div>
+                <div class="nav-text">
+                    <span class="nav-title">Firmware & BLE</span>
+                    <span class="nav-subtitle">Update via Bluetooth</span>
+                </div>
+            </a>
         </nav>
 
         <!-- Ringkasan -->
@@ -101,26 +108,24 @@
                 <span class="summary-value" id="summary-target">30.0°C</span>
             </div>
             <div class="summary-item">
-                <span>Kipas</span>
-                <span class="summary-value" id="summary-kipas">OFF</span>
-            </div>
-            <div class="summary-item">
-                <span>Pemanas</span>
-                <span class="summary-value" id="summary-pemanas">OFF</span>
+                <span>Bluetooth</span>
+                <span class="summary-value" id="summary-ble">
+                    <span class="status-dot standby" id="summary-ble-dot"></span> <span id="summary-ble-text">Nonaktif</span>
+                </span>
             </div>
         </div>
 
-        <!-- PWA Install Button -->
+        <!-- Install PWA Button (Hidden by default, shown via JS if installable) -->
         <div class="sidebar-install" id="installContainer" style="display: none;">
-            <button class="btn btn-install" id="btnInstallApp" onclick="triggerPWAInstall()">
-                <i class="fas fa-download"></i> Install ke HP / PC
+            <button class="btn-install" id="btnInstallPWA" onclick="triggerPWAInstall()">
+                <i class="fas fa-arrow-down-to-line"></i> Pasang Aplikasi
             </button>
         </div>
 
         <!-- Footer -->
         <div class="sidebar-footer">
-            <p>&copy; 2024 TeknoBro</p>
-            <p class="version">v1.0.0</p>
+            <p>TeknoBro IoT System</p>
+            <p class="version">v1.2.0 &bull; ESP32 BLE Ready</p>
         </div>
     </aside>
 
@@ -128,8 +133,8 @@
     <main class="main-content">
 
         <!-- Mobile Header -->
-        <div class="mobile-header">
-            <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">
+        <header class="mobile-header">
+            <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Menu">
                 <i class="fas fa-bars"></i>
             </button>
             <div class="mobile-logo">
@@ -137,102 +142,92 @@
                 <span>TeknoBro</span>
             </div>
             <div class="mobile-header-actions">
-                <button class="mobile-install-btn" id="mobileInstallBtn" style="display: none;" onclick="triggerPWAInstall()" title="Install Aplikasi">
-                    <i class="fas fa-arrow-down"></i>
+                <button class="mobile-install-btn" id="mobileInstallBtn" onclick="triggerPWAInstall()" style="display: none;" title="Pasang Aplikasi">
+                    <i class="fas fa-download"></i>
                 </button>
-                <div class="mobile-status">
+                <div class="status-indicator">
                     <span class="status-dot online" id="mobile-status-dot"></span>
                 </div>
             </div>
+        </header>
+
+        <!-- Demo Mode Banner (shown when Firebase not configured) -->
+        <div class="demo-banner" id="demoBanner" style="display: none;">
+            <i class="fas fa-info-circle"></i>
+            <span>Mode Demo Aktif — Menggunakan data simulasi. Sambungkan Firebase untuk data real-time.</span>
         </div>
 
         <!-- ========== PAGE: MONITORING ========== -->
         <section class="page active" id="page-monitoring">
-            <!-- Header -->
             <div class="page-header">
                 <div class="page-header-left">
-                    <h1><i class="fas fa-temperature-high"></i> Monitoring Suhu Maggot</h1>
+                    <h1><i class="fas fa-temperature-half"></i> Monitoring Suhu Maggot</h1>
                     <p>Pantau dan kendalikan suhu media maggot dari mana saja</p>
                 </div>
                 <div class="page-header-right">
-                    <div class="status-badge online" id="statusBadge">
-                        <span class="status-dot"></span>
-                        <span id="statusText">ONLINE</span>
-                    </div>
+                    <span class="live-badge" id="liveBadge">
+                        <span class="pulse-ring"></span>
+                        <span class="badge-text" id="badgeText">ONLINE</span>
+                    </span>
                     <button class="btn btn-primary" onclick="exportCSV()">
                         <i class="fas fa-file-csv"></i> Ekspor CSV
                     </button>
                 </div>
             </div>
 
-            <!-- Demo Banner -->
-            <div class="demo-banner" id="demoBanner">
-                <i class="fas fa-info-circle"></i>
-                Mode demo: data simulasi. Isi konfigurasi Firebase di bagian CFG pada file <code>js/app.js</code>.
-            </div>
-
-            <!-- Stats Cards -->
+            <!-- Stats Grid -->
             <div class="stats-grid">
+                <!-- Suhu Media Card -->
                 <div class="stat-card" id="card-suhu-media">
                     <div class="stat-card-header">
                         <span class="stat-label">Suhu Media</span>
                         <div class="stat-icon suhu-media"><i class="fas fa-thermometer-half"></i></div>
                     </div>
                     <div class="stat-value" id="val-suhu-media">--.-°C</div>
-                    <div class="stat-status ideal" id="status-suhu-media">Memuat...</div>
+                    <div class="stat-footer">
+                        <span class="stat-status ideal" id="status-suhu-media">Menunggu ESP32...</span>
+                    </div>
                 </div>
 
+                <!-- Kelembaban Card -->
                 <div class="stat-card" id="card-kelembaban">
                     <div class="stat-card-header">
                         <span class="stat-label">Kelembaban Udara</span>
                         <div class="stat-icon kelembaban"><i class="fas fa-tint"></i></div>
                     </div>
                     <div class="stat-value" id="val-kelembaban">--.-%</div>
-                    <div class="stat-status" id="status-kelembaban">Memuat...</div>
+                    <div class="stat-footer">
+                        <span class="stat-status ideal" id="status-kelembaban">RH</span>
+                    </div>
                 </div>
 
+                <!-- Target Suhu Card -->
                 <div class="stat-card" id="card-target">
                     <div class="stat-card-header">
                         <span class="stat-label">Target Suhu</span>
                         <div class="stat-icon target"><i class="fas fa-crosshairs"></i></div>
                     </div>
                     <div class="stat-value" id="val-target">--.-°C</div>
-                    <div class="stat-status" id="status-mode">Mode Auto</div>
+                    <div class="stat-footer">
+                        <span class="stat-status ideal" id="status-target">Mode Auto</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Gauge & Trend Row -->
+            <!-- Charts & Gauge Grid -->
             <div class="charts-grid">
-                <!-- Gauge -->
-                <div class="chart-card gauge-card">
+                <!-- Gauge Card -->
+                <div class="chart-card">
                     <h3 class="chart-title">Suhu Media Saat Ini</h3>
                     <div class="gauge-wrapper">
-                        <svg viewBox="0 0 300 200" class="gauge-svg" id="gaugeSvg">
-                            <!-- Background arc -->
-                            <defs>
-                                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                    <stop offset="0%" style="stop-color:#00b4d8"/>
-                                    <stop offset="30%" style="stop-color:#00c853"/>
-                                    <stop offset="60%" style="stop-color:#ffa726"/>
-                                    <stop offset="100%" style="stop-color:#ef5350"/>
-                                </linearGradient>
-                            </defs>
-                            <!-- Track -->
-                            <path d="M 30 170 A 120 120 0 0 1 270 170" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="20" stroke-linecap="round"/>
-                            <!-- Value arc -->
-                            <path id="gaugeArc" d="M 30 170 A 120 120 0 0 1 270 170" fill="none" stroke="url(#gaugeGradient)" stroke-width="20" stroke-linecap="round" stroke-dasharray="0, 377"/>
-                            <!-- Tick marks -->
-                            <text x="22" y="190" fill="#7b89a8" font-size="11" font-family="Inter">20</text>
-                            <text x="55" y="120" fill="#7b89a8" font-size="11" font-family="Inter">25</text>
-                            <text x="120" y="72" fill="#7b89a8" font-size="11" font-family="Inter">30</text>
-                            <text x="190" y="72" fill="#7b89a8" font-size="11" font-family="Inter">35</text>
-                            <text x="235" y="120" fill="#7b89a8" font-size="11" font-family="Inter">40</text>
-                            <text x="260" y="190" fill="#7b89a8" font-size="11" font-family="Inter">45</text>
-                            <!-- Needle -->
-                            <line id="gaugeNeedle" x1="150" y1="170" x2="150" y2="65" stroke="#fff" stroke-width="3" stroke-linecap="round" transform="rotate(-90, 150, 170)" style="transition: transform 1s ease-out;"/>
-                            <!-- Center circle -->
-                            <circle cx="150" cy="170" r="8" fill="#00b4d8"/>
-                            <circle cx="150" cy="170" r="4" fill="#060b1e"/>
+                        <svg class="gauge-svg" viewBox="0 0 200 120" id="gaugeSvg">
+                            <path class="gauge-bg" d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke-width="14" stroke-linecap="round"/>
+                            <path class="gauge-fill" id="gaugeFill" d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke-width="14" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            <text x="30" y="118" class="gauge-tick">20</text>
+                            <text x="65" y="90" class="gauge-tick">25</text>
+                            <text x="100" y="75" class="gauge-tick">30</text>
+                            <text x="135" y="90" class="gauge-tick">35</text>
+                            <text x="165" y="118" class="gauge-tick">40</text>
                         </svg>
                         <div class="gauge-value-display">
                             <span class="gauge-temp" id="gaugeTemp">--.-</span>
@@ -241,9 +236,9 @@
                     </div>
                 </div>
 
-                <!-- Trend Chart -->
-                <div class="chart-card trend-card">
-                    <h3 class="chart-title">Tren Suhu (60 Menit Terakhir)</h3>
+                <!-- Trend Chart Card -->
+                <div class="chart-card">
+                    <h3 class="chart-title">Tren Suhu Media (60 Menit Terakhir)</h3>
                     <div class="chart-container">
                         <canvas id="trendChart"></canvas>
                     </div>
@@ -255,46 +250,40 @@
         <section class="page" id="page-kontrol">
             <div class="page-header">
                 <div class="page-header-left">
-                    <h1><i class="fas fa-sliders-h"></i> Kontrol Perangkat</h1>
-                    <p>Atur mode, target suhu, dan kontrol perangkat pendingin & pemanas</p>
+                    <h1><i class="fas fa-sliders-h"></i> Kontrol Sistem</h1>
+                    <p>Atur mode operasi, target suhu, dan kontrol manual perangkat</p>
                 </div>
             </div>
 
-            <!-- Mode Selection -->
+            <!-- Mode Selector -->
             <div class="control-section">
-                <div class="control-card mode-card">
-                    <div class="control-card-header">
-                        <div class="control-icon mode"><i class="fas fa-robot"></i></div>
-                        <div>
-                            <h3>Mode Operasi</h3>
-                            <p>Pilih mode kontrol perangkat</p>
+                <h3 class="section-title">Mode Operasi</h3>
+                <p class="section-subtitle">Pilih cara sistem mengendalikan suhu media maggot</p>
+                <div class="mode-selector">
+                    <button class="mode-btn active" id="modeAutoBtn" onclick="setMode('auto')">
+                        <div class="mode-icon"><i class="fas fa-robot"></i></div>
+                        <div class="mode-info">
+                            <h4>Mode Otomatis</h4>
+                            <p>Sistem mengatur kipas/peltier dan pemanas secara otomatis berdasarkan target suhu</p>
                         </div>
-                    </div>
-                    <div class="mode-selector">
-                        <button class="mode-btn active" id="btn-mode-auto" onclick="setMode('auto')">
-                            <i class="fas fa-robot"></i>
-                            <span>Auto</span>
-                            <small>Sistem otomatis ESP32</small>
-                        </button>
-                        <button class="mode-btn" id="btn-mode-manual" onclick="setMode('manual')">
-                            <i class="fas fa-hand-paper"></i>
-                            <span>Manual</span>
-                            <small>Kontrol dari aplikasi</small>
-                        </button>
-                    </div>
+                        <div class="mode-check"><i class="fas fa-check-circle"></i></div>
+                    </button>
+                    <button class="mode-btn" id="modeManualBtn" onclick="setMode('manual')">
+                        <div class="mode-icon"><i class="fas fa-hand-paper"></i></div>
+                        <div class="mode-info">
+                            <h4>Mode Manual</h4>
+                            <p>Kendali penuh — nyalakan dan matikan perangkat sesuai keinginan Anda</p>
+                        </div>
+                        <div class="mode-check"><i class="fas fa-check-circle"></i></div>
+                    </button>
                 </div>
             </div>
 
             <!-- Target Temperature -->
             <div class="control-section">
-                <div class="control-card">
-                    <div class="control-card-header">
-                        <div class="control-icon target"><i class="fas fa-crosshairs"></i></div>
-                        <div>
-                            <h3>Target Suhu</h3>
-                            <p>Atur suhu target media maggot</p>
-                        </div>
-                    </div>
+                <h3 class="section-title">Target Suhu Media</h3>
+                <p class="section-subtitle">Suhu ideal media maggot BSF: 28°C - 35°C (Optimal: 30°C)</p>
+                <div class="control-card target-card">
                     <div class="target-control">
                         <button class="target-btn minus" onclick="adjustTarget(-0.5)">
                             <i class="fas fa-minus"></i>
@@ -320,7 +309,7 @@
 
             <!-- Manual Controls -->
             <div class="control-section" id="manualControls">
-                <h3 class="section-title">Kontrol Manual</h3>
+                <h3 class="section-title">Kontrol Manual Perangkat</h3>
                 <p class="section-subtitle" id="manualHint">Aktifkan mode Manual untuk mengontrol perangkat secara langsung</p>
                 <div class="controls-grid">
                     <!-- Kipas + Peltier -->
@@ -563,7 +552,280 @@
             </div>
         </section>
 
+        <!-- ========== PAGE: FIRMWARE & BLUETOOTH OTA ========== -->
+        <section class="page" id="page-firmware">
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1><i class="fas fa-microchip"></i> Update Firmware ESP32 (BLE)</h1>
+                    <p>Perbarui program ESP32 secara nirkabel via Bluetooth tanpa sambungan kabel USB</p>
+                </div>
+                <div class="page-header-right">
+                    <button class="btn btn-outline" onclick="openOtaGuideModal()">
+                        <i class="fas fa-book-open"></i> Panduan Update
+                    </button>
+                </div>
+            </div>
+
+            <!-- Bluetooth Power Switch & Status Grid -->
+            <div class="ble-controls-grid">
+                <!-- Card 1: Saklar Bluetooth ESP32 -->
+                <div class="control-card ble-power-card">
+                    <div class="ble-power-header">
+                        <div class="ble-power-icon" id="blePowerIcon">
+                            <i class="fab fa-bluetooth-b"></i>
+                        </div>
+                        <div class="ble-power-info">
+                            <h3>Saklar Radio Bluetooth ESP32</h3>
+                            <p>Hidupkan sebelum update, dan matikan kembali untuk hemat daya</p>
+                        </div>
+                        <div class="ble-power-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-esp32-ble" onchange="toggleEsp32Bluetooth(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="ble-power-status-bar">
+                        <span class="detail-label"><i class="fas fa-broadcast-tower"></i> Status Radio BLE:</span>
+                        <span class="ble-status-badge standby" id="esp32BleStatusBadge">
+                            <span class="status-dot standby"></span> Standby / Nonaktif
+                        </span>
+                    </div>
+                    <p class="ble-power-hint">
+                        <i class="fas fa-info-circle"></i> Saat saklar aktif, ESP32 menyalakan Bluetooth Low Energy (BLE) dengan nama <strong>TeknoBro-OTA</strong> untuk menerima file firmware.
+                    </p>
+                </div>
+
+                <!-- Card 2: Status Koneksi HP ke ESP32 -->
+                <div class="control-card ble-connection-card">
+                    <div class="ble-conn-header">
+                        <div class="ble-conn-info">
+                            <h4>Koneksi Bluetooth HP</h4>
+                            <p id="bleConnDeviceName">Belum Terhubung ke ESP32</p>
+                        </div>
+                        <span class="ble-conn-pill disconnected" id="bleConnPill">Terputus</span>
+                    </div>
+                    <div class="ble-conn-actions">
+                        <button class="btn btn-primary" id="btnBleConnect" onclick="handleBleConnect()">
+                            <i class="fab fa-bluetooth-b"></i> Hubungkan Bluetooth
+                        </button>
+                        <button class="btn btn-outline" id="btnBleDisconnect" onclick="handleBleDisconnect()" style="display: none;">
+                            <i class="fas fa-unlink"></i> Putuskan
+                        </button>
+                    </div>
+                    <div class="ble-meta-info" id="bleMetaInfo" style="display: none;">
+                        <span><i class="fas fa-signal"></i> Sinyal: <strong id="bleRssiVal">-64 dBm</strong></span>
+                        <span><i class="fas fa-fingerprint"></i> Service: <strong>ESP32 OTA</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Upload Card (.bin) -->
+            <div class="control-card ota-upload-card" id="otaUploadCard">
+                <div class="ota-card-title">
+                    <i class="fas fa-file-code"></i>
+                    <div>
+                        <h3>Pilih File Firmware (.bin)</h3>
+                        <p>Upload binary kompilasi Arduino IDE (.bin) untuk memperbarui fitur alat</p>
+                    </div>
+                </div>
+
+                <!-- Dropzone / Input Area -->
+                <div class="ota-dropzone" id="otaDropzone" onclick="document.getElementById('firmwareFileInput').click()">
+                    <input type="file" id="firmwareFileInput" accept=".bin" onchange="handleFirmwareFileSelect(event)" style="display: none;">
+                    <div class="dropzone-icon">
+                        <i class="fas fa-cloud-arrow-up"></i>
+                    </div>
+                    <h4>Pilih File Firmware (.bin)</h4>
+                    <p>Klik di sini atau pilih file dari memori HP Anda</p>
+                    <span class="dropzone-badge"><i class="fas fa-shield-halved"></i> Format Wajib: .bin</span>
+                </div>
+
+                <!-- File Preview Box (Hidden until file selected) -->
+                <div class="ota-file-details" id="otaFileDetails" style="display: none;">
+                    <div class="file-icon-box">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <div class="file-meta">
+                        <h4 id="otaFileName">firmware.bin</h4>
+                        <div class="file-sub-meta">
+                            <span id="otaFileSize">0 KB</span> &bull;
+                            <span class="text-success" id="otaFileStatus"><i class="fas fa-check-circle"></i> Siap Di-flash</span>
+                        </div>
+                    </div>
+                    <button class="btn-remove-file" onclick="removeSelectedFirmware()" title="Hapus file">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Action Button -->
+                <div class="ota-action-bar">
+                    <button class="btn btn-primary btn-large btn-flash" id="btnStartOta" onclick="startFirmwareUpdate()" disabled>
+                        <i class="fas fa-bolt"></i> Mulai Flash Firmware
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live OTA Flashing Animation Card (Hidden until flashing starts) -->
+            <div class="control-card ota-progress-card" id="otaProgressCard" style="display: none;">
+                <div class="ota-anim-stage">
+                    <!-- Radar Pulse Wave Animation -->
+                    <div class="ota-radar-wrap">
+                        <div class="ota-pulse-ring ring-1"></div>
+                        <div class="ota-pulse-ring ring-2"></div>
+                        <div class="ota-pulse-ring ring-3"></div>
+                        <div class="ota-chip-core">
+                            <i class="fas fa-microchip ota-chip-icon"></i>
+                            <i class="fab fa-bluetooth-b ota-ble-icon"></i>
+                        </div>
+                    </div>
+
+                    <!-- Progress Percentage -->
+                    <div class="ota-percentage-display">
+                        <span class="ota-percent-val" id="otaPercentVal">0%</span>
+                        <span class="ota-status-text" id="otaStatusText">Menyiapkan koneksi BLE OTA...</span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="ota-progress-track">
+                        <div class="ota-progress-bar" id="otaProgressBar" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- Transfer Stats Metrics -->
+                    <div class="ota-metrics-grid">
+                        <div class="ota-metric-box">
+                            <span class="metric-label"><i class="fas fa-tachometer-alt"></i> Kecepatan</span>
+                            <span class="metric-val" id="otaSpeedVal">-- KB/s</span>
+                        </div>
+                        <div class="ota-metric-box">
+                            <span class="metric-label"><i class="fas fa-database"></i> Terkirim</span>
+                            <span class="metric-val" id="otaBytesVal">0 KB / 0 KB</span>
+                        </div>
+                        <div class="ota-metric-box">
+                            <span class="metric-label"><i class="fas fa-clock"></i> Sisa Waktu</span>
+                            <span class="metric-val" id="otaTimeVal">--:--</span>
+                        </div>
+                    </div>
+
+                    <!-- Step-by-Step Stage Checklist -->
+                    <div class="ota-steps-list">
+                        <div class="ota-step-item" id="otaStep1">
+                            <div class="step-icon"><i class="fas fa-circle-notch fa-spin"></i></div>
+                            <div class="step-text">
+                                <strong>1. Handshake Bluetooth BLE</strong>
+                                <span>Verifikasi UUID Service OTA ESP32</span>
+                            </div>
+                        </div>
+                        <div class="ota-step-item" id="otaStep2">
+                            <div class="step-icon"><i class="far fa-circle"></i></div>
+                            <div class="step-text">
+                                <strong>2. Inisialisasi Partisi Flash</strong>
+                                <span>Menyiapkan sektor OTA flash partition</span>
+                            </div>
+                        </div>
+                        <div class="ota-step-item" id="otaStep3">
+                            <div class="step-icon"><i class="far fa-circle"></i></div>
+                            <div class="step-text">
+                                <strong>3. Mentransfer Paket Firmware</strong>
+                                <span>Mengirim binary chunk per chunk</span>
+                            </div>
+                        </div>
+                        <div class="ota-step-item" id="otaStep4">
+                            <div class="step-icon"><i class="far fa-circle"></i></div>
+                            <div class="step-text">
+                                <strong>4. Validasi Checksum</strong>
+                                <span>Memeriksa integritas hash binary</span>
+                            </div>
+                        </div>
+                        <div class="ota-step-item" id="otaStep5">
+                            <div class="step-icon"><i class="far fa-circle"></i></div>
+                            <div class="step-text">
+                                <strong>5. Reboot & Selesai</strong>
+                                <span>ESP32 me-restart dan memuat fitur baru</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Warning Alert -->
+                    <div class="ota-warning-alert">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        <span><strong>PENTING:</strong> Jangan mematikan daya ESP32 atau menutup aplikasi selama proses update berlangsung!</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
+
+    <!-- ===== MODAL PANDUAN UPDATE FIRMWARE ===== -->
+    <div class="modal-backdrop" id="otaGuideModal" onclick="closeOtaGuideModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-book-open"></i>
+                    <h3>Panduan Update Firmware ESP32 via Bluetooth</h3>
+                </div>
+                <button class="modal-close-btn" onclick="closeOtaGuideModal(event)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="guide-step">
+                    <div class="guide-step-num">1</div>
+                    <div class="guide-step-content">
+                        <h4>Ekspor File .bin dari Arduino IDE / PlatformIO</h4>
+                        <p>Setelah Anda menambahkan fitur baru pada kode program ESP32:</p>
+                        <ul>
+                            <li>Di <strong>Arduino IDE</strong>: Klik menu <code>Sketch</code> &rarr; <code>Export Compiled Binary</code> (Ctrl+Alt+S). File <code>.bin</code> akan tersimpan di dalam folder proyek Anda.</li>
+                            <li>Di <strong>PlatformIO</strong>: File <code>firmware.bin</code> otomatis dibuat di folder <code>.pio/build/esp32/firmware.bin</code> setelah di-compile.</li>
+                            <li>Kirim atau simpan file <code>.bin</code> tersebut ke HP Android Anda (misal via WhatsApp / Google Drive / kabel).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="guide-step-num">2</div>
+                    <div class="guide-step-content">
+                        <h4>Nyalakan Saklar Bluetooth ESP32</h4>
+                        <p>Buka halaman <strong>Firmware & BLE</strong> di aplikasi TeknoBro, lalu aktifkan toggle <strong>"Saklar Radio Bluetooth ESP32"</strong>. ESP32 akan menyalakan pemancar BLE dengan nama <code>TeknoBro-OTA</code>.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="guide-step-num">3</div>
+                    <div class="guide-step-content">
+                        <h4>Hubungkan Bluetooth HP ke ESP32</h4>
+                        <p>Pastikan Bluetooth di HP Anda sudah aktif. Klik tombol <strong>"Hubungkan Bluetooth"</strong> dan pilih perangkat <code>TeknoBro-OTA</code> pada jendela dialog yang muncul.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="guide-step-num">4</div>
+                    <div class="guide-step-content">
+                        <h4>Pilih File .bin & Mulai Flash</h4>
+                        <p>Klik kolom <strong>"Pilih File Firmware (.bin)"</strong>, pilih file binary yang sudah disiapkan di HP Anda, kemudian klik tombol biru <strong>"Mulai Flash Firmware"</strong>.</p>
+                    </div>
+                </div>
+
+                <div class="guide-step">
+                    <div class="guide-step-num">5</div>
+                    <div class="guide-step-content">
+                        <h4>Tunggu Hingga 100% Selesai</h4>
+                        <p>Aplikasi akan menampilkan animasi transfer data live. Setelah mencapai 100%, ESP32 akan otomatis restart dalam hitungan 2-3 detik dan menjalankan firmware baru dengan semua fitur terbaru!</p>
+                        <div class="guide-tip">
+                            <i class="fas fa-lightbulb"></i>
+                            <span><strong>Tips Hemat Daya:</strong> Setelah proses update selesai, Anda dapat mematikan kembali saklar Bluetooth ESP32 agar daya listrik hemat dan sinyal WiFi semakin optimal.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeOtaGuideModal(event)">
+                    <i class="fas fa-check"></i> Saya Mengerti
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Custom JS -->
     <script src="js/app.js"></script>
