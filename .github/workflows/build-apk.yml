@@ -24,9 +24,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Generate Android Project Files
         run: |
           mkdir -p android/app/src/main/java/id/teknobro/maggot
@@ -146,7 +143,7 @@ jobs:
           # Logo icon
           cp assets/icon-192.png android/app/src/main/res/drawable/icon.png
 
-          # MainActivity.java
+          # MainActivity.java (Pure Fullscreen WebView Native)
           cat << 'EOF' > android/app/src/main/java/id/teknobro/maggot/MainActivity.java
           package id.teknobro.maggot;
 
@@ -175,6 +172,7 @@ jobs:
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
                   settings.setLoadsImagesAutomatically(true);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
@@ -197,8 +195,11 @@ jobs:
 
       - name: Build Android APK with Gradle
         working-directory: android
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
-          gradle assembleDebug
+          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          gradle assembleDebug --no-daemon
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
