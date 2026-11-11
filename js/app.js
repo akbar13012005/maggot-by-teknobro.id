@@ -321,38 +321,71 @@
   });
 
   function connectFirebase() {
-    if (!window.firebase || !window.firebase.database) {
-      $('demoBanner')?.style && ($('demoBanner').style.display = 'flex');
+    if (!window.firebase || !window.firebase.database || !window.firebase.auth) {
+      if ($('demoBanner')) $('demoBanner').style.display = 'flex';
       setDeviceStatus('waiting', 'Firebase SDK tidak tersedia');
+      toast('Firebase SDK tidak lengkap. Periksa koneksi internet dan script Firebase.', 'error');
       return;
     }
+
     try {
       const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+      const auth = app.auth();
       db = app.database();
-      db.ref('.info/connected').on('value', snap => {
-        if (!snap.val()) toast('Koneksi ke Firebase terputus. Mencoba menyambung kembali…', 'error');
+
+      // Dashboard memakai Anonymous Authentication yang sama-sama diaktifkan
+      // untuk ESP32. Listener RTDB baru dipasang setelah login berhasil.
+      auth.signInAnonymously().then(() => {
+        if ($('demoBanner')) $('demoBanner').style.display = 'none';
+        console.info('[TeknoBro] Firebase anonymous auth berhasil:', auth.currentUser?.uid);
+
+        db.ref('.info/connected').on('value', snap => {
+          if (!snap.val()) {
+            setDeviceStatus(lastSensorTimestamp ? 'stale' : 'waiting', 'Koneksi dashboard ke Firebase terputus');
+          }
+        });
+
+        db.ref('/sensor').on('value', snap => {
+          const value = snap.val();
+          if (value) updateSensor(value);
+          else {
+            lastSensorTimestamp = 0;
+            setDeviceStatus('waiting', 'Belum ada data sensor pada Firebase');
+          }
+        }, err => {
+          setDeviceStatus('waiting', 'Firebase sensor: ' + err.message);
+          toast('Tidak dapat membaca sensor Firebase: ' + err.message, 'error');
+        });
+
+        db.ref('/control').on('value', snap => {
+          if (snap.val()) updateControl(snap.val());
+        }, err => toast('Tidak dapat membaca kontrol: ' + err.message, 'error'));
+
+        db.ref('/status').on('value', snap => {
+          const status = snap.val() || {};
+          setText('wifi-current-ssid', status.wifi_ssid || '—');
+          setText('wifi-current-rssi', Number.isFinite(Number(status.wifi_rssi)) ? status.wifi_rssi + ' dBm' : '—');
+          setText('wifi-current-ip', status.ip || '—');
+        }, err => console.warn('Status Firebase:', err));
+
+        db.ref('/history').limitToLast(1000).on('value', snap => {
+          const raw = snap.val() || {};
+          historyRows = Object.values(raw)
+            .filter(row => row && Number(row.timestamp) > 0)
+            .map(row => ({ ...row, timestamp: Number(row.timestamp) }));
+          renderHistory();
+        }, err => toast('Tidak dapat membaca riwayat: ' + err.message, 'error'));
+      }).catch(err => {
+        db = null;
+        setDeviceStatus('waiting', 'Autentikasi Firebase gagal');
+        toast('Login Firebase gagal: ' + (err.code || err.message), 'error');
+        console.error('[TeknoBro] Firebase auth:', err);
       });
-      db.ref('/sensor').on('value', snap => {
-        const value = snap.val();
-        if (value) updateSensor(value);
-        else setDeviceStatus('waiting', 'Belum ada data sensor pada Firebase');
-      }, err => { setDeviceStatus('waiting', 'Firebase sensor: ' + err.message); toast('Tidak dapat membaca sensor Firebase: ' + err.message, 'error'); });
-      db.ref('/control').on('value', snap => { if (snap.val()) updateControl(snap.val()); },
-        err => toast('Tidak dapat membaca kontrol: ' + err.message, 'error'));
-      db.ref('/status').on('value', snap => {
-        const s = snap.val() || {};
-        setText('wifi-current-ssid', s.wifi_ssid || '—');
-        setText('wifi-current-rssi', Number.isFinite(Number(s.wifi_rssi)) ? s.wifi_rssi + ' dBm' : '—');
-        setText('wifi-current-ip', s.ip || '—');
-      }, err => console.warn('Status Firebase:', err));
-      db.ref('/history').limitToLast(1000).on('value', snap => {
-        const raw = snap.val() || {};
-        historyRows = Object.values(raw).filter(r => r && Number(r.timestamp) > 0).map(r => ({...r, timestamp:Number(r.timestamp)}));
-        renderHistory();
-      }, err => toast('Tidak dapat membaca riwayat: ' + err.message, 'error'));
     } catch (err) {
+      db = null;
       setDeviceStatus('waiting', 'Firebase gagal diinisialisasi');
       toast('Firebase gagal diinisialisasi: ' + err.message, 'error');
+      console.error('[TeknoBro] Firebase init:', err);
     }
   }
 
