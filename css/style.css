@@ -2568,7 +2568,10 @@ body {
 }
 
 #icon-kipas.fan-spinning {
-    animation: teknobro-fan-spin 1s linear infinite;
+    display: inline-flex !important;
+    transform-origin: center center !important;
+    animation: teknobro-fan-spin 0.8s linear infinite !important;
+    animation-play-state: running !important;
     will-change: transform;
 }
 
@@ -2635,6 +2638,3 @@ body {
     .device-card p { font-size: .7rem; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    #icon-kipas.fan-spinning { animation: none; }
-}
