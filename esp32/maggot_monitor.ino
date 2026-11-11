@@ -185,6 +185,14 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
+    // Firebase membuat/menyegarkan token secara asynchronous setelah begin().
+    // Jangan jalankan operasi RTDB sebelum Firebase.ready() benar-benar true.
+    if (!firebaseReady && Firebase.ready()) {
+        firebaseReady = true;
+        Serial.println("✅ Firebase Authentication berhasil; RTDB siap.");
+        cekKontrolFirebase();
+    }
+
     // 1. Baca sensor
     if (now - lastSensorRead >= SENSOR_READ_INTERVAL) {
         lastSensorRead = now;
@@ -192,7 +200,7 @@ void loop() {
     }
 
     // 2. Cek kontrol dari Firebase
-    if (now - lastControlCheck >= CONTROL_CHECK_INTERVAL) {
+    if (firebaseReady && now - lastControlCheck >= CONTROL_CHECK_INTERVAL) {
         lastControlCheck = now;
         cekKontrolFirebase();
     }
