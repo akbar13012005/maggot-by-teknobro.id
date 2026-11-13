@@ -273,12 +273,17 @@
     }
   };
 
-  function renderHistory() {
+  function selectedHistoryRows() {
     const from = $('dateFrom')?.value ? new Date($('dateFrom').value + 'T00:00:00').getTime() / 1000 : 0;
     const to = $('dateTo')?.value ? new Date($('dateTo').value + 'T23:59:59').getTime() / 1000 : Infinity;
     const limit = Number($('dataLimit')?.value || 100);
     let rows = historyRows.filter(r => r.timestamp >= from && r.timestamp <= to).sort((a,b) => b.timestamp - a.timestamp);
     if (limit > 0) rows = rows.slice(0, limit);
+    return rows;
+  }
+
+  function renderHistory() {
+    const rows = selectedHistoryRows();
     setText('dataCount', rows.length + ' data');
     const body = $('historyTableBody');
     if (body) {
@@ -308,12 +313,30 @@
   }
   window.loadHistory = renderHistory;
   window.exportCSV = () => {
-    if (!historyRows.length) { toast('Belum ada data riwayat untuk diekspor.', 'error'); return; }
-    const rows = [['Waktu','Suhu Media (°C)','Kelembaban (%)','Target (°C)','Mode','Kipas/Peltier','Pemanas'],
-      ...historyRows.slice().sort((a,b) => a.timestamp-b.timestamp).map(r => [new Date(r.timestamp*1000).toLocaleString('id-ID'),r.suhu_media,r.kelembaban,r.target,r.mode,r.kipas,r.pemanas])];
-    const csv = rows.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g,'""') + '"').join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'}));
-    const a = document.createElement('a'); a.href = url; a.download = 'teknobro-riwayat-maggot.csv'; a.click(); URL.revokeObjectURL(url);
+    const selected = selectedHistoryRows()
+      .filter(r => Number.isFinite(Number(r.timestamp)) && Number(r.timestamp) > 0 &&
+        Number(r.timestamp) * 1000 + 7 * 3600000 <= 8640000000000000)
+      .sort((a, b) => a.timestamp - b.timestamp);
+    if (!selected.length) { toast('Tidak ada data pada filter yang dipilih untuk diekspor.', 'error'); return; }
+    // Numeric fields only: missing/invalid values stay blank, not zero or formulas.
+    const numeric = value => {
+      if (value === null || value === undefined || typeof value === 'boolean' ||
+          (typeof value === 'string' && !value.trim())) return '';
+      const n = Number(value);
+      return Number.isFinite(n) ? String(n) : '';
+    };
+    const rows = [['Suhu (°C)', 'Kelembapan (%)', 'Waktu (WIB)'],
+      ...selected.map(r => [numeric(r.suhu_media), numeric(r.kelembaban),
+        new Date(Number(r.timestamp) * 1000 + 7 * 3600000).toISOString().slice(0, 19).replace('T', ' ')])];
+    const csv = rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'teknobro-riwayat-maggot.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   window.saveWiFiConfig = async () => {

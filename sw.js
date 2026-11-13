@@ -1,5 +1,5 @@
 /* TeknoBro PWA service worker — versioned app-shell cache. */
-const CACHE_NAME = 'teknobro-v1.0.6';
+const CACHE_NAME = 'teknobro-v1.0.7-csv';
 const APP_SHELL = [
   './',
   './index.html',
